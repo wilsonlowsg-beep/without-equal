@@ -12,22 +12,30 @@ export default function Home() {
   const supabase = createClient()
 
   useEffect(() => {
-    // Timeout — never hang on loading longer than 5 seconds
-    const timeout = setTimeout(() => setLoading(false), 5000)
+    const timeout = setTimeout(() => {
+      setLoading(false)
+    }, 4000)
 
     const loadUser = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (session?.user) {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from('users')
             .select('*, group:groups(*)')
             .eq('id', session.user.id)
             .single()
-          setUser(data ?? null)
+          if (error || !data) {
+            // Profile not found — sign out and go to login
+            await supabase.auth.signOut()
+            setUser(null)
+          } else {
+            setUser(data)
+          }
         }
       } catch(e) {
-        // Session error — go to login
+        await supabase.auth.signOut()
+        setUser(null)
       } finally {
         clearTimeout(timeout)
         setLoading(false)
@@ -36,17 +44,24 @@ export default function Home() {
 
     loadUser()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') { setUser(null); return }
-      if (session?.user) {
-        const { data } = await supabase
-          .from('users')
-          .select('*, group:groups(*)')
-          .eq('id', session.user.id)
-          .single()
-        setUser(data ?? null)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_OUT') { setUser(null); return }
+        if (event === 'SIGNED_IN' && session?.user) {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*, group:groups(*)')
+            .eq('id', session.user.id)
+            .single()
+          if (error || !data) {
+            await supabase.auth.signOut()
+            setUser(null)
+          } else {
+            setUser(data)
+          }
+        }
       }
-    })
+    )
 
     return () => {
       subscription.unsubscribe()
@@ -56,21 +71,30 @@ export default function Home() {
 
   if (loading) return (
     <div style={{
-      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      display:'flex', flexDirection:'column',
+      alignItems:'center', justifyContent:'center',
       minHeight:'100dvh', background:'#08111C', gap:16,
     }}>
-      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,letterSpacing:'.22em',textTransform:'uppercase',color:'#3A5470'}}>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:9,
+        letterSpacing:'.22em',textTransform:'uppercase',color:'#3A5470'}}>
         WITHOUT EQUAL
       </div>
-      <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:12,color:'#7A9AB8',letterSpacing:'.1em'}}>
+      <div style={{fontFamily:"'JetBrains Mono',monospace",
+        fontSize:12,color:'#7A9AB8',letterSpacing:'.1em'}}>
         LOADING…
       </div>
-      <div style={{fontSize:11,color:'#3A5470',marginTop:8}}>
-        Taking too long?{' '}
-        <button onClick={()=>setLoading(false)} style={{color:'#E8A020',background:'none',border:'none',cursor:'pointer',fontSize:11,textDecoration:'underline'}}>
-          Go to login
-        </button>
-      </div>
+      <button
+        onClick={async () => {
+          await supabase.auth.signOut()
+          setLoading(false)
+        }}
+        style={{
+          marginTop:8, color:'#E8A020', background:'none',
+          border:'none', cursor:'pointer', fontSize:11,
+          textDecoration:'underline', fontFamily:'inherit',
+        }}>
+        Taking too long? Click here
+      </button>
     </div>
   )
 
