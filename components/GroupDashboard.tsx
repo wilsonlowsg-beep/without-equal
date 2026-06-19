@@ -28,7 +28,7 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
       supabase.from('users').select('*').eq('group_id', user.group_id).eq('is_active', true).neq('role','admin').order('full_name'),
       supabase.from('daily_submissions').select('*').eq('submission_date', today).in('user_id', []),
       supabase.from('leave_periods').select('*').eq('status','approved').lte('start_date',today).gte('end_date',today),
-      supabase.from('group_reviews').select('*, reviewer:users(*)').eq('group_id', user.group_id).eq('review_date', today).single(),
+      supabase.from('group_reviews').select('*, reviewer:users(*)').eq('group_id', user.group_id).eq('review_date', today).maybeSingle(),
     ])
 
     // Re-fetch subs now that we have member IDs

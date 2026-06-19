@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { loadOrCreateUserProfile, logSessionResult } from '@/lib/user-profile'
 import type { User } from '@/types/database'
 import LoginPage from '@/components/LoginPage'
 import AppShell from '@/components/AppShell'
@@ -17,16 +18,16 @@ export default function Home() {
 
     const loadUser = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
+        const { data: { session }, error } = await supabase.auth.getSession()
+        logSessionResult('initial load', session, error)
         if (session?.user) {
-          const { data } = await supabase
-            .from('users')
-            .select('*, group:groups(*)')
-            .eq('id', session.user.id)
-            .single()
-          setUser(data ?? null)
+          const { user: profile, error: profileError } = await loadOrCreateUserProfile(supabase, session.user, 'initial load')
+          if (profileError) console.error('[auth] initial load: profile error', profileError)
+          if (profile) console.info('[auth] initial load: redirect execution', { target: 'dashboard', userId: profile.id })
+          setUser(profile)
         }
       } catch(e) {
+        console.error('[auth] initial load: unexpected error', e)
         // Session error — go to login
       } finally {
         clearTimeout(timeout)
@@ -37,14 +38,13 @@ export default function Home() {
     loadUser()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.info('[auth] onAuthStateChange', { event, userId: session?.user?.id })
       if (event === 'SIGNED_OUT') { setUser(null); return }
       if (session?.user) {
-        const { data } = await supabase
-          .from('users')
-          .select('*, group:groups(*)')
-          .eq('id', session.user.id)
-          .single()
-        setUser(data ?? null)
+        const { user: profile, error: profileError } = await loadOrCreateUserProfile(supabase, session.user, `auth state: ${event}`)
+        if (profileError) console.error('[auth] auth state: profile error', profileError)
+        if (profile) console.info('[auth] auth state: redirect execution', { target: 'dashboard', userId: profile.id })
+        setUser(profile)
       }
     })
 

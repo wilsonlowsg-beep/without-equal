@@ -93,7 +93,7 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
     setSaving(true); setErr('')
 
     // Check duplicate mobile
-    const { data: dup } = await supabase.from('users').select('id').eq('mobile', form.mobile.trim()).single()
+    const { data: dup } = await supabase.from('users').select('id').eq('mobile', form.mobile.trim()).maybeSingle()
     if (dup) { setErr('This mobile number is already registered.'); setSaving(false); return }
 
     const authEmail = form.email.trim().toLowerCase()
