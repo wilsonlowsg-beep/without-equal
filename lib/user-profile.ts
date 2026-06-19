@@ -15,7 +15,7 @@ function defaultProfileFor(authUser: AuthUser): Database['public']['Tables']['us
     (authUser.user_metadata?.full_name as string | undefined) ||
     (authUser.user_metadata?.name as string | undefined) ||
     emailName ||
-    'Pending Profile'
+    'Profile incomplete'
 
   return {
     id: authUser.id,
@@ -24,9 +24,10 @@ function defaultProfileFor(authUser: AuthUser): Database['public']['Tables']['us
     title: null,
     full_name: fullName,
     group_id: 1,
-    appointment: 'Pending onboarding',
+    appointment: 'Profile incomplete',
     mobile: authUser.phone || `auth-${authUser.id.slice(0, 8)}`,
-    role: 'personnel',
+    email: authUser.email,
+    role: 'user',
     is_active: true,
   }
 }
@@ -54,7 +55,7 @@ export async function loadOrCreateUserProfile(
 ): Promise<{ user: User | null; error: string | null }> {
   const initial = await fetchProfile(supabase, authUser.id, context)
   if (initial.error) return { user: null, error: initial.error.message }
-  if (initial.data) return { user: initial.data as User, error: null }
+  if (initial.data) return { user: { ...initial.data, email: (initial.data as User).email ?? authUser.email } as User, error: null }
 
   const profile = defaultProfileFor(authUser)
   authLog(`${context}: profile missing; creating default profile`, profile)
@@ -89,13 +90,13 @@ export async function loadOrCreateUserProfile(
   })
 
   if (insert.error && insert.error.code !== '23505') return { user: null, error: insert.error.message }
-  if (insert.data) return { user: insert.data as User, error: null }
+  if (insert.data) return { user: { ...insert.data, email: (insert.data as User).email ?? authUser.email } as User, error: null }
 
   const reloaded = await fetchProfile(supabase, authUser.id, `${context}: reload after create`)
   if (reloaded.error) return { user: null, error: reloaded.error.message }
 
   return {
-    user: (reloaded.data as User | null) ?? null,
+    user: reloaded.data ? { ...reloaded.data, email: (reloaded.data as User).email ?? authUser.email } as User : null,
     error: reloaded.data ? null : 'Profile could not be loaded after creation.',
   }
 }

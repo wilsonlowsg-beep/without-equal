@@ -75,5 +75,5 @@ export default function Home() {
   )
 
   if (!user) return <LoginPage onLogin={setUser} />
-  return <AppShell user={user} onLogout={() => setUser(null)} />
+  return <AppShell user={user} onLogout={() => setUser(null)} onUserUpdate={setUser} />
 }

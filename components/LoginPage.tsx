@@ -97,7 +97,7 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
     })
     if (error||!data.user) { setRerr(error?.message??'Registration failed.'); setRload(false); return }
 
-    await supabase.from('users').insert({
+    await supabase.from('users').upsert({
       id:             data.user.id,
       personnel_type: reg.type as any,
       rank:           reg.type==='Military' ? reg.rank  : null,
@@ -107,8 +107,8 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
       appointment:    reg.appt.trim(),
       mobile:         reg.mobile.trim(),
       email:          reg.email.trim().toLowerCase(),
-      role:           'personnel',
-    })
+      role:           'user',
+    }, { onConflict: 'id' })
 
     setMsg('Registered! Check your email to confirm, then sign in.')
     setScreen('login')

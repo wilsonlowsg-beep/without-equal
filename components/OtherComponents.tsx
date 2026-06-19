@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User } from '@/types/database'
-import { statusColor, displayName, todayStr, GROUPS, MIL_RANKS, CIV_TITLES } from '@/lib/constants'
+import { statusColor, displayName, lastName, normalizeRole, profileStatusText, todayStr, GROUPS, MIL_RANKS, CIV_TITLES } from '@/lib/constants'
 
 // ── MY HISTORY ───────────────────────────────────────────────────────────────
 export function MyHistory({ user }: { user: User }) {
@@ -96,7 +96,7 @@ export function AdminDashboard({ showToast }: { showToast: (m:string)=>void }) {
   const [audit, setAudit]     = useState<any[]>([])
   const [activeTab, setATab]  = useState<'users'|'audit'>('users')
   const [showAdd, setShowAdd] = useState(false)
-  const [nu, setNu] = useState({type:'Military',rank:'MAJ',title:'Mr',name:'',groupId:1,appt:'',mobile:'',email:'',password:'demo',role:'personnel'})
+  const [nu, setNu] = useState({type:'Military',rank:'MAJ',title:'Mr',name:'',groupId:1,appt:'',mobile:'',email:'',password:'demo',role:'user'})
   const [nuErr, setNuErr] = useState('')
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
@@ -129,7 +129,7 @@ export function AdminDashboard({ showToast }: { showToast: (m:string)=>void }) {
       setSaving(false); return
     }
     if (data?.user) {
-      await supabase.from('users').insert({
+      await supabase.from('users').upsert({
         id: data.user.id,
         personnel_type: nu.type as any,
         rank: nu.type==='Military'?nu.rank:undefined,
@@ -139,7 +139,7 @@ export function AdminDashboard({ showToast }: { showToast: (m:string)=>void }) {
         appointment: nu.appt.trim(),
         mobile: nu.mobile.trim(),
         role: nu.role as any,
-      })
+      }, { onConflict: 'id' })
       showToast('User added ✓')
       setShowAdd(false)
       loadData()
@@ -148,16 +148,17 @@ export function AdminDashboard({ showToast }: { showToast: (m:string)=>void }) {
   }
 
   const cycleRole = async (u: User) => {
-    const order: User['role'][] = ['personnel','grouphead','ac3','admin']
-    const next = order[(order.indexOf(u.role)+1)%order.length]
+    const order: User['role'][] = ['user','commander','admin']
+    const currentRole = normalizeRole(u.role)
+    const next = order[(order.indexOf(currentRole)+1)%order.length]
     await supabase.from('users').update({role:next}).eq('id',u.id)
-    showToast(`${u.full_name.split(' ').pop()} → ${next}`)
+    showToast(`${lastName(u)} -> ${next}`)
     loadData()
   }
 
   const deactivate = async (u: User) => {
     await supabase.from('users').update({is_active:false}).eq('id',u.id)
-    showToast(`${u.full_name.split(' ').pop()} deactivated`)
+    showToast(`${lastName(u)} deactivated`)
     loadData()
   }
 
@@ -193,8 +194,8 @@ export function AdminDashboard({ showToast }: { showToast: (m:string)=>void }) {
             <div className="fg"><label className="we-label">Email</label><input className="we-input" value={nu.email} onChange={e=>upd('email',e.target.value)} placeholder="name@we.mil.sg"/></div>
             <div className="fg"><label className="we-label">Role</label>
               <select className="we-input we-select" value={nu.role} onChange={e=>upd('role',e.target.value)}>
-                <option value="personnel">Personnel</option><option value="grouphead">Group Head</option>
-                <option value="ac3">AC3</option><option value="admin">Admin</option>
+                <option value="user">User</option><option value="commander">Commander</option>
+                <option value="admin">Admin</option>
               </select></div>
             {nuErr && <div className="we-err-text" style={{marginBottom:10}}>{nuErr}</div>}
             <div style={{display:'flex',gap:8}}>
@@ -213,10 +214,10 @@ export function AdminDashboard({ showToast }: { showToast: (m:string)=>void }) {
                 <div className="we-row" key={u.id}>
                   <div style={{flex:1}}>
                     <div style={{fontSize:12,fontWeight:600}}>{displayName(u)}</div>
-                    <div style={{fontSize:10,color:'var(--dim)'}}>{u.appointment} · {u.mobile}</div>
+                    <div style={{fontSize:10,color:'var(--dim)'}}>{profileStatusText(u.appointment)} · {u.mobile}</div>
                   </div>
                   <span className="we-chip" style={{background:'var(--surf-hi)',color:'var(--dim)',border:'1px solid var(--border)',fontSize:9,cursor:'pointer',marginRight:6}} onClick={()=>cycleRole(u)}>
-                    {u.role}
+                    {normalizeRole(u.role)}
                   </span>
                   <button className="btn-sm" style={{fontSize:10,padding:'4px 8px',color:'var(--red)',borderColor:'rgba(220,53,69,.2)'}} onClick={()=>deactivate(u)}>✕</button>
                 </div>

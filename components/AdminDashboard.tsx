@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User } from '@/types/database'
-import { displayName, GROUPS, MIL_RANKS, CIV_TITLES, statusColor } from '@/lib/constants'
+import { displayName, lastName, normalizeRole, profileStatusText, GROUPS, MIL_RANKS, CIV_TITLES, statusColor } from '@/lib/constants'
 
 // removed - using real email now
 function mobileToEmail(mobile: string): string {
@@ -11,14 +11,13 @@ function mobileToEmail(mobile: string): string {
 }
 
 const ROLE_OPTIONS = [
-  { value:'personnel', label:'Personnel',  desc:'Submit own status only. Cannot see others.',                          color:'var(--dim)',    icon:'👤' },
-  { value:'grouphead', label:'Group Head', desc:'Sees full status of own group only. Can mark group Reviewed.',        color:'var(--blue)',   icon:'👥' },
-  { value:'ac3',       label:'AC3 View',   desc:'Sees all groups, formation dashboard, trends, and full report.',      color:'var(--amber)',  icon:'🎖️' },
-  { value:'admin',     label:'Admin',      desc:'Manages users and roles. Full system access.',                        color:'var(--red)',    icon:'⚙️' },
-]
+  { value:'user',      label:'User',      desc:'Submits own status and leave only.',                                  color:'var(--dim)',    icon:'👤' },
+  { value:'commander', label:'Commander', desc:'Views command dashboards and group readiness.',                       color:'var(--amber)',  icon:'🎖️' },
+  { value:'admin',     label:'Admin',     desc:'Manages users, roles, and system access.',                           color:'var(--red)',    icon:'⚙️' },
+] as const
 
 function RoleBadge({ role }: { role: string }) {
-  const cfg = ROLE_OPTIONS.find(r => r.value === role) ?? ROLE_OPTIONS[0]
+  const cfg = ROLE_OPTIONS.find(r => r.value === normalizeRole(role)) ?? ROLE_OPTIONS[0]
   return (
     <span style={{
       display:'inline-flex', alignItems:'center', gap:4,
@@ -31,14 +30,14 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 function RoleModal({ user, onSave, onClose }: { user: User; onSave:(role:string,groupId:number)=>void; onClose:()=>void }) {
-  const [role,    setRole]    = useState(user.role)
+  const [role,    setRole]    = useState(normalizeRole(user.role))
   const [groupId, setGroupId] = useState(user.group_id)
   return (
     <div style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={onClose}>
       <div style={{background:'var(--surf)',border:'1px solid var(--border)',borderRadius:'14px 14px 0 0',padding:'20px 18px 40px',width:'100%',maxWidth:430}} onClick={e=>e.stopPropagation()}>
         <div style={{width:36,height:4,borderRadius:4,background:'var(--border)',margin:'0 auto 16px'}}/>
         <div style={{fontSize:14,fontWeight:700,marginBottom:2}}>{displayName(user)}</div>
-        <div style={{fontSize:11,color:'var(--dim)',marginBottom:16}}>{user.appointment} · {user.mobile}</div>
+        <div style={{fontSize:11,color:'var(--dim)',marginBottom:16}}>{profileStatusText(user.appointment)} · {user.mobile}</div>
 
         <label className="we-label" style={{marginBottom:8,display:'block'}}>Assign to Group</label>
         <select className="we-input we-select" style={{marginBottom:16}} value={groupId} onChange={e=>setGroupId(Number(e.target.value))}>
@@ -105,7 +104,7 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
     }
 
     // Confirm immediately
-    const { error: profileErr } = await supabase.from('users').insert({
+    const { error: profileErr } = await supabase.from('users').upsert({
       id:             data.user.id,
       personnel_type: form.type as any,
       rank:           form.type==='Military' ? form.rank  : null,
@@ -115,15 +114,15 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
       appointment:    form.appt.trim(),
       mobile:         form.mobile.trim(),
       email:          authEmail,
-      role:           'personnel',
-    })
+      role:           'user',
+    }, { onConflict: 'id' })
 
     if (profileErr) { setErr('Profile error: ' + profileErr.message); setSaving(false); return }
 
     // Auto-confirm in auth
     await supabase.rpc('confirm_user_by_mobile' as any, { p_mobile: form.mobile.trim() }).catch(()=>{})
 
-    showToast(`${form.name} added ✓ — tap their name below to assign role`)
+    showToast(`${form.name} added ✓ - tap their name below to assign role`)
     onDone()
     setSaving(false)
   }
@@ -216,22 +215,22 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
       old_value:{ role:editing.role, group_id:editing.group_id },
       new_value:{ role, group_id:groupId },
     })
-    showToast(`${editing.full_name.split(' ').pop()} → ${role} ✓`)
+    showToast(`${lastName(editing)} -> ${role} ✓`)
     setEditing(null)
     loadData()
   }
 
   const deactivate = async (u:User) => {
     await supabase.from('users').update({is_active:false}).eq('id',u.id)
-    showToast(`${u.full_name.split(' ').pop()} deactivated`)
+    showToast(`${lastName(u)} deactivated`)
     loadData()
   }
 
   const filtered = users.filter(u =>
     !search ||
-    u.full_name.toLowerCase().includes(search.toLowerCase()) ||
+    displayName(u).toLowerCase().includes(search.toLowerCase()) ||
     u.mobile.includes(search) ||
-    u.appointment.toLowerCase().includes(search.toLowerCase())
+    profileStatusText(u.appointment).toLowerCase().includes(search.toLowerCase())
   )
 
   if (loading) return <div style={{padding:24,color:'var(--dim)',fontSize:13}}>Loading…</div>
@@ -295,7 +294,7 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
                   onClick={()=>setEditing(u)}>
                   <div style={{flex:1}}>
                     <div style={{fontSize:13,fontWeight:600}}>{displayName(u)}</div>
-                    <div style={{fontSize:10,color:'var(--dim)',marginTop:2}}>{u.appointment} · {u.mobile}</div>
+                    <div style={{fontSize:10,color:'var(--dim)',marginTop:2}}>{profileStatusText(u.appointment)} · {u.mobile}</div>
                   </div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:3}}>
                     <RoleBadge role={u.role}/>
@@ -330,10 +329,10 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
             :audit.map((a,i)=>(
               <div className="we-row" key={i}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:12,fontWeight:600}}>{a.user?(a.user as any).full_name:'System'}</div>
+                  <div style={{fontSize:12,fontWeight:600}}>{a.user?displayName(a.user as any):'System'}</div>
                   <div style={{fontSize:11,color:'var(--dim)'}}>{a.action} · {new Date(a.created_at).toLocaleString('en-SG',{dateStyle:'short',timeStyle:'short'})}</div>
                   {a.action==='ROLE_CHANGE'&&a.old_value&&a.new_value&&(
-                    <div style={{fontSize:11,color:'var(--dim)'}}>{a.old_value.role} → <span style={{color:'var(--amber)',fontWeight:600}}>{a.new_value.role}</span></div>
+                    <div style={{fontSize:11,color:'var(--dim)'}}>{a.old_value.role} -> <span style={{color:'var(--amber)',fontWeight:600}}>{a.new_value.role}</span></div>
                   )}
                   {a.new_value?.amend_reason&&<div style={{fontSize:11,color:'var(--dim)'}}>Reason: {a.new_value.amend_reason}</div>}
                 </div>
