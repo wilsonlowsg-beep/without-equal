@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase'
 import type { User } from '@/types/database'
 import { displayName, GROUPS, MIL_RANKS, CIV_TITLES, statusColor } from '@/lib/constants'
 
+// removed - using real email now
 function mobileToEmail(mobile: string): string {
   return `${mobile.trim()}@without-equal.app`
 }
@@ -75,7 +76,7 @@ function RoleModal({ user, onSave, onClose }: { user: User; onSave:(role:string,
 function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:string)=>void }) {
   const [form, setForm] = useState({
     type:'Military', rank:'MAJ', title:'Mr',
-    name:'', groupId:1, appt:'', mobile:'', password:'',
+    name:'', groupId:1, appt:'', mobile:'', email:'', password:'',
   })
   const [err, setErr]       = useState('')
   const [saving, setSaving] = useState(false)
@@ -86,6 +87,7 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
     if (!form.name.trim())   { setErr('Full name is required.'); return }
     if (!form.appt.trim())   { setErr('Appointment is required.'); return }
     if (!form.mobile.trim()) { setErr('Mobile number is required.'); return }
+    if (!form.email.trim()||!form.email.includes('@')) { setErr('Valid email address required.'); return }
     if (!/^\d{8}$/.test(form.mobile.trim())) { setErr('Enter a valid 8-digit Singapore mobile number.'); return }
     if (!form.password || form.password.length < 6) { setErr('Password must be at least 6 characters.'); return }
     setSaving(true); setErr('')
@@ -94,7 +96,7 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
     const { data: dup } = await supabase.from('users').select('id').eq('mobile', form.mobile.trim()).single()
     if (dup) { setErr('This mobile number is already registered.'); setSaving(false); return }
 
-    const authEmail = mobileToEmail(form.mobile)
+    const authEmail = form.email.trim().toLowerCase()
     const { data, error } = await supabase.auth.signUp({ email: authEmail, password: form.password })
 
     if (error || !data.user) {
@@ -159,6 +161,11 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
 
       <div className="fg"><label className="we-label">Mobile Number</label>
         <input className="we-input" placeholder="8-digit e.g. 91234567" inputMode="numeric" value={form.mobile} onChange={e=>upd('mobile',e.target.value)}/></div>
+
+      <div className="fg"><label className="we-label">Email Address</label>
+        <input className="we-input" type="email" placeholder="e.g. name@gmail.com" value={form.email} onChange={e=>upd('email',e.target.value)}/>
+        <div style={{fontSize:10,color:'var(--dim)',marginTop:4}}>Any email — Gmail, Hotmail, work email all accepted.</div>
+      </div>
 
       <div className="fg"><label className="we-label">Temporary Password</label>
         <input className="we-input" type="password" placeholder="Min 6 characters" value={form.password} onChange={e=>upd('password',e.target.value)}/>
