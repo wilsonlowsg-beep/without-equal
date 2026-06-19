@@ -13,8 +13,8 @@ Formation daily readiness and availability system. Mobile-first command dashboar
 3. Wait for project to provision (~2 min)
 4. Go to **SQL Editor** → New query → paste the full contents of `supabase-schema.sql` → Run
 5. Go to **Settings → API** → copy:
-   - `Project URL` → this is your `https://lptvrkztsjeeeqfeeqom.supabase.co`
-   - `anon public` key → this is your `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwdHZya3p0c2plZWVxZmVlcW9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NDU5MDQsImV4cCI6MjA5NzQyMTkwNH0.GGOg8AZzNGKCtgl9J26MZseaizmIEayVEHZwFUTt3mM`
+   - `Project URL` → this is your `NEXT_PUBLIC_SUPABASE_URL`
+   - `anon public` key → this is your `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
 ### Step 2 — GitHub
 
