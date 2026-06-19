@@ -17,19 +17,25 @@ const GROUPS = [
   {id:5,name:'Plans'},
 ]
 
+// Convert mobile to internal email for Supabase Auth
+// We use a fixed domain so it's always valid
+function mobileToEmail(mobile: string): string {
+  return `${mobile.trim()}@without-equal.app`
+}
+
 export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   const [screen, setScreen] = useState<Screen>('login')
   const supabase = createClient()
 
   // LOGIN
-  const [cred,      setCred]      = useState('')
+  const [mobile,    setMobile]    = useState('')
   const [pass,      setPass]      = useState('')
   const [loginErr,  setLoginErr]  = useState('')
   const [loginLoad, setLoginLoad] = useState(false)
   const [successMsg,setSuccessMsg]= useState('')
 
   // FORGOT
-  const [forgotCred,   setForgotCred]   = useState('')
+  const [forgotMobile, setForgotMobile] = useState('')
   const [forgotOtp,    setForgotOtp]    = useState('')
   const [sentOtp,      setSentOtp]      = useState('')
   const [newPass,      setNewPass]      = useState('')
@@ -39,8 +45,8 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
 
   // REGISTER
   const [reg, setReg] = useState({
-    type:'Military', rank:'BG', title:'Mr',
-    name:'', groupId:1, appt:'', mobile:'', email:'', password:'', confirm:''
+    type:'Military', rank:'MAJ', title:'Mr',
+    name:'', groupId:1, appt:'', mobile:'', password:'', confirm:''
   })
   const [regErr,  setRegErr]  = useState('')
   const [regLoad, setRegLoad] = useState(false)
@@ -48,47 +54,14 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
 
   // ── LOGIN ──────────────────────────────────────────────────
   const handleLogin = async () => {
-    if (!cred.trim() || !pass) { setLoginErr('Enter mobile/email and password.'); return }
+    if (!mobile.trim() || !pass) { setLoginErr('Enter your mobile number and password.'); return }
     setLoginLoad(true); setLoginErr('')
 
-    // Try direct email login first
-    let emailToTry = cred.trim()
-
-    // If it looks like a mobile number, look up their email
-    if (/^\d+$/.test(emailToTry)) {
-      const { data: userRow } = await supabase
-        .from('users')
-        .select('id')
-        .eq('mobile', emailToTry)
-        .single()
-
-      if (!userRow) {
-        setLoginErr('No account found with that mobile number.')
-        setLoginLoad(false); return
-      }
-      // Get their auth email from metadata
-      // We stored email directly in users table
-      const { data: fullUser } = await supabase
-        .from('users')
-        .select('*')
-        .eq('mobile', emailToTry)
-        .single()
-
-      if (fullUser?.email) {
-        emailToTry = fullUser.email
-      } else {
-        setLoginErr('Account found but email not set. Please sign in with your email address.')
-        setLoginLoad(false); return
-      }
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: emailToTry,
-      password: pass,
-    })
+    const email = mobileToEmail(mobile)
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass })
 
     if (error || !data.user) {
-      setLoginErr('Invalid credentials. Check your email/mobile and password.')
+      setLoginErr('Invalid mobile number or password.')
       setLoginLoad(false); return
     }
 
@@ -107,14 +80,14 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
     setForgotErr('')
     const { data: u } = await supabase
       .from('users')
-      .select('id, email, mobile')
-      .or(`mobile.eq.${forgotCred.trim()},email.eq.${forgotCred.trim()}`)
+      .select('id, mobile')
+      .eq('mobile', forgotMobile.trim())
       .single()
 
-    if (!u) { setForgotErr('No account found.'); return }
+    if (!u) { setForgotErr('No account found with that mobile number.'); return }
     const code = String(Math.floor(100000 + Math.random() * 900000))
     setSentOtp(code)
-    setForgotMsg(`OTP sent. Demo code: ${code}`)
+    setForgotMsg(`OTP generated. In production this is sent via SMS. Demo code: ${code}`)
     setScreen('forgot2')
   }
 
@@ -124,44 +97,45 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
   }
 
   const handlePasswordReset = async () => {
-    if (newPass.length < 6)         { setForgotErr('Min 6 characters.'); return }
-    if (newPass !== confirmPass)     { setForgotErr('Passwords do not match.'); return }
+    if (newPass.length < 6)       { setForgotErr('Min 6 characters.'); return }
+    if (newPass !== confirmPass)   { setForgotErr('Passwords do not match.'); return }
     const { error } = await supabase.auth.updateUser({ password: newPass })
-    if (error) { setForgotErr('Reset failed. Please try again.'); return }
-    setSuccessMsg('Password reset successfully. Sign in with your new password.')
+    if (error) { setForgotErr('Reset failed. Try signing in again.'); return }
+    setSuccessMsg('Password reset. Sign in with your new password.')
     setScreen('login')
   }
 
   // ── REGISTER ───────────────────────────────────────────────
   const handleRegister = async () => {
-    if (!reg.name.trim())     { setRegErr('Full name is required.'); return }
-    if (!reg.appt.trim())     { setRegErr('Appointment is required.'); return }
-    if (!reg.mobile.trim())   { setRegErr('Mobile number is required.'); return }
-    if (!reg.email.trim())    { setRegErr('Email is required.'); return }
-    if (!reg.email.includes('@')) { setRegErr('Enter a valid email address.'); return }
-    if (!reg.password)        { setRegErr('Password is required.'); return }
+    if (!reg.name.trim())   { setRegErr('Full name is required.'); return }
+    if (!reg.appt.trim())   { setRegErr('Appointment is required.'); return }
+    if (!reg.mobile.trim()) { setRegErr('Mobile number is required.'); return }
+    if (!/^\d{8}$/.test(reg.mobile.trim())) { setRegErr('Enter a valid 8-digit Singapore mobile number.'); return }
+    if (!reg.password)      { setRegErr('Password is required.'); return }
     if (reg.password.length < 6)  { setRegErr('Password must be at least 6 characters.'); return }
     if (reg.password !== reg.confirm) { setRegErr('Passwords do not match.'); return }
 
     setRegLoad(true); setRegErr('')
 
     // Check for duplicate mobile
-    const { data: dupMobile } = await supabase
+    const { data: dup } = await supabase
       .from('users').select('id').eq('mobile', reg.mobile.trim()).single()
-    if (dupMobile) { setRegErr('Mobile number already registered.'); setRegLoad(false); return }
+    if (dup) { setRegErr('This mobile number is already registered.'); setRegLoad(false); return }
 
-    // Sign up with real email
+    // Sign up using mobile-as-email pattern
+    const authEmail = mobileToEmail(reg.mobile)
     const { data, error } = await supabase.auth.signUp({
-      email:    reg.email.trim().toLowerCase(),
+      email:    authEmail,
       password: reg.password,
     })
 
     if (error || !data.user) {
-      setRegErr(error?.message ?? 'Registration failed. Try a different email.')
+      setRegErr(error?.message ?? 'Registration failed. Please try again.')
       setRegLoad(false); return
     }
 
-    // Insert user profile — include email so we can look up by mobile later
+    // Confirm immediately (no email needed)
+    // Insert user profile
     const { error: profileErr } = await supabase.from('users').insert({
       id:             data.user.id,
       personnel_type: reg.type as any,
@@ -171,7 +145,7 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
       group_id:       Number(reg.groupId),
       appointment:    reg.appt.trim(),
       mobile:         reg.mobile.trim(),
-      email:          reg.email.trim().toLowerCase(),
+      email:          authEmail,
       role:           'personnel',
     })
 
@@ -180,7 +154,7 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
       setRegLoad(false); return
     }
 
-    setSuccessMsg('Registered! Sign in with your email and password.')
+    setSuccessMsg(`Registered! Sign in with mobile ${reg.mobile.trim()} and your password.`)
     setScreen('login')
     setRegLoad(false)
   }
@@ -191,11 +165,15 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
       <div className="we-login-brand">WITHOUT EQUAL</div>
       <div className="we-login-ttl">Daily Readiness</div>
       <div className="we-login-rule" />
-      {successMsg && <div style={{color:'var(--green)',fontSize:12,textAlign:'center',marginBottom:12,lineHeight:1.5}}>{successMsg}</div>}
+      {successMsg && (
+        <div style={{color:'var(--green)',fontSize:12,textAlign:'center',marginBottom:16,lineHeight:1.6,padding:'10px 12px',background:'rgba(22,169,107,0.08)',borderRadius:8,border:'1px solid rgba(22,169,107,0.2)'}}>
+          {successMsg}
+        </div>
+      )}
       <div className="fg">
-        <label className="we-label">Mobile Number or Email</label>
-        <input className="we-input" placeholder="e.g. 97761277 or wilsonlow.sg@gmail.com"
-          value={cred} onChange={e=>setCred(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleLogin()} />
+        <label className="we-label">Mobile Number</label>
+        <input className="we-input" placeholder="e.g. 97761277" inputMode="numeric"
+          value={mobile} onChange={e=>setMobile(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleLogin()} />
       </div>
       <div className="fg">
         <label className="we-label">Password</label>
@@ -210,6 +188,9 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
         <button className="btn-sm" onClick={()=>{setForgotErr('');setForgotMsg('');setScreen('forgot1')}}>Forgot Password?</button>
         <button className="btn-sm" onClick={()=>{setRegErr('');setScreen('register')}}>Register</button>
       </div>
+      <div style={{marginTop:20,fontSize:11,color:'var(--faint)',textAlign:'center',lineHeight:1.6}}>
+        Sign in with your mobile number and password.<br/>No email required.
+      </div>
     </div>
   )
 
@@ -220,14 +201,15 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
       <div className="we-login-ttl">Reset Password</div>
       <div className="we-login-rule" />
       <div style={{fontSize:13,color:'var(--dim)',marginBottom:16,textAlign:'center',lineHeight:1.6}}>
-        Enter your registered mobile number or email.
+        Enter your registered mobile number.
       </div>
       <div className="fg">
-        <label className="we-label">Mobile Number or Email</label>
-        <input className="we-input" placeholder="e.g. 97761277" value={forgotCred} onChange={e=>setForgotCred(e.target.value)} />
+        <label className="we-label">Mobile Number</label>
+        <input className="we-input" placeholder="e.g. 97761277" inputMode="numeric"
+          value={forgotMobile} onChange={e=>setForgotMobile(e.target.value)} />
       </div>
       {forgotErr && <div className="we-login-err">{forgotErr}</div>}
-      <button className="btn btn-primary" onClick={handleForgotLookup} disabled={!forgotCred.trim()}>Send OTP</button>
+      <button className="btn btn-primary" onClick={handleForgotLookup} disabled={!forgotMobile.trim()}>Send OTP</button>
       <div style={{marginTop:12,textAlign:'center'}}><button className="btn-sm" onClick={()=>setScreen('login')}>← Back</button></div>
     </div>
   )
@@ -238,10 +220,13 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
       <div className="we-login-brand">WITHOUT EQUAL</div>
       <div className="we-login-ttl">Enter OTP</div>
       <div className="we-login-rule" />
-      {forgotMsg && <div className="we-otp-hint" style={{textAlign:'center',marginBottom:16}}>{forgotMsg}</div>}
+      {forgotMsg && (
+        <div className="we-otp-hint" style={{textAlign:'center',marginBottom:16,lineHeight:1.6}}>{forgotMsg}</div>
+      )}
       <div className="fg">
         <label className="we-label">6-Digit OTP</label>
-        <input className="we-input" placeholder="Enter OTP" maxLength={6} value={forgotOtp} onChange={e=>setForgotOtp(e.target.value)} />
+        <input className="we-input" placeholder="Enter OTP" maxLength={6} inputMode="numeric"
+          value={forgotOtp} onChange={e=>setForgotOtp(e.target.value)} />
       </div>
       {forgotErr && <div className="we-login-err">{forgotErr}</div>}
       <button className="btn btn-primary" onClick={handleOtpVerify} disabled={forgotOtp.length<6}>Verify OTP</button>
@@ -257,14 +242,18 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
       <div className="we-login-rule" />
       <div className="fg">
         <label className="we-label">New Password</label>
-        <input className="we-input" type="password" placeholder="Min 6 characters" value={newPass} onChange={e=>setNewPass(e.target.value)} />
+        <input className="we-input" type="password" placeholder="Min 6 characters"
+          value={newPass} onChange={e=>setNewPass(e.target.value)} />
       </div>
       <div className="fg">
         <label className="we-label">Confirm Password</label>
-        <input className="we-input" type="password" placeholder="Repeat password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} />
+        <input className="we-input" type="password" placeholder="Repeat password"
+          value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} />
       </div>
       {forgotErr && <div className="we-login-err">{forgotErr}</div>}
-      <button className="btn btn-primary" onClick={handlePasswordReset} disabled={!newPass||!confirmPass}>Set New Password</button>
+      <button className="btn btn-primary" onClick={handlePasswordReset} disabled={!newPass||!confirmPass}>
+        Set New Password
+      </button>
     </div>
   )
 
@@ -303,7 +292,8 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
       }
 
       <div className="fg"><label className="we-label">Full Name</label>
-        <input className="we-input" placeholder="e.g. Wilson Low" value={reg.name} onChange={e=>updateReg('name',e.target.value)} /></div>
+        <input className="we-input" placeholder="e.g. Wilson Low" value={reg.name}
+          onChange={e=>updateReg('name',e.target.value)} /></div>
 
       <div className="fg"><label className="we-label">Group</label>
         <select className="we-input we-select" value={reg.groupId} onChange={e=>updateReg('groupId',e.target.value)}>
@@ -311,19 +301,24 @@ export default function LoginPage({ onLogin }: { onLogin: (u: User) => void }) {
         </select></div>
 
       <div className="fg"><label className="we-label">Appointment</label>
-        <input className="we-input" placeholder="e.g. AC3 / SO2 Current" value={reg.appt} onChange={e=>updateReg('appt',e.target.value)} /></div>
+        <input className="we-input" placeholder="e.g. SO2 Current" value={reg.appt}
+          onChange={e=>updateReg('appt',e.target.value)} /></div>
 
       <div className="fg"><label className="we-label">Mobile Number</label>
-        <input className="we-input" placeholder="e.g. 97761277" value={reg.mobile} onChange={e=>updateReg('mobile',e.target.value)} /></div>
+        <input className="we-input" placeholder="8-digit Singapore number e.g. 91234567"
+          inputMode="numeric" value={reg.mobile} onChange={e=>updateReg('mobile',e.target.value)} /></div>
 
-      <div className="fg"><label className="we-label">Email Address</label>
-        <input className="we-input" placeholder="e.g. wilsonlow.sg@gmail.com" value={reg.email} onChange={e=>updateReg('email',e.target.value)} /></div>
+      <div style={{background:'var(--surf-hi)',borderRadius:8,padding:'10px 12px',marginBottom:12,fontSize:11,color:'var(--dim)',lineHeight:1.6}}>
+        ℹ️ No email needed. Your mobile number is your login ID.
+      </div>
 
       <div className="fg"><label className="we-label">Password</label>
-        <input className="we-input" type="password" placeholder="Min 6 characters" value={reg.password} onChange={e=>updateReg('password',e.target.value)} /></div>
+        <input className="we-input" type="password" placeholder="Min 6 characters" value={reg.password}
+          onChange={e=>updateReg('password',e.target.value)} /></div>
 
       <div className="fg"><label className="we-label">Confirm Password</label>
-        <input className="we-input" type="password" placeholder="Repeat password" value={reg.confirm} onChange={e=>updateReg('confirm',e.target.value)} /></div>
+        <input className="we-input" type="password" placeholder="Repeat password" value={reg.confirm}
+          onChange={e=>updateReg('confirm',e.target.value)} /></div>
 
       {regErr && <div className="we-login-err" style={{marginBottom:12}}>{regErr}</div>}
 
