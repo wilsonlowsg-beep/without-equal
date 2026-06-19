@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { loadOrCreateUserProfile, logSessionResult, logUserResult } from '@/lib/user-profile'
 import type { User } from '@/types/database'
 
 type Screen = 'login' | 'forgot' | 'register'
@@ -40,31 +39,11 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
   const doLogin = async () => {
     if (!email.trim()||!pass) { setLerr('Enter your email and password.'); return }
     setLload(true); setLerr('')
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email:email.trim().toLowerCase(), password:pass })
-      console.info('[auth] login: signInWithPassword result', { hasUser: Boolean(data.user), userId: data.user?.id, error })
-      if (error||!data.user) { setLerr('Invalid email or password.'); return }
-
-      const userResult = await supabase.auth.getUser()
-      logUserResult('login', userResult.data.user, userResult.error)
-
-      const sessionResult = await supabase.auth.getSession()
-      logSessionResult('login', sessionResult.data.session, sessionResult.error)
-
-      const { user: profile, error: profileError } = await loadOrCreateUserProfile(supabase, data.user, 'login')
-      if (profileError || !profile) {
-        setLerr(`Signed in, but profile setup failed: ${profileError ?? 'missing profile'}`)
-        return
-      }
-
-      console.info('[auth] login: redirect execution', { target: 'dashboard', userId: profile.id })
-      onLogin(profile)
-    } catch (e) {
-      console.error('[auth] login: unexpected error', e)
-      setLerr('Sign in failed. Please try again.')
-    } finally {
-      setLload(false)
-    }
+    const { data, error } = await supabase.auth.signInWithPassword({ email:email.trim().toLowerCase(), password:pass })
+    if (error||!data.user) { setLerr('Invalid email or password.'); setLload(false); return }
+    const { data:u } = await supabase.from('users').select('*,group:groups(*)').eq('id',data.user.id).single()
+    if (u) onLogin(u)
+    setLload(false)
   }
 
   const doForgot = async () => {
@@ -87,7 +66,7 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
     if (reg.password!==reg.confirm) { setRerr('Passwords do not match.'); return }
     setRload(true); setRerr('')
 
-    const { data:dup } = await supabase.from('users').select('id').eq('mobile',reg.mobile.trim()).maybeSingle()
+    const { data:dup } = await supabase.from('users').select('id').eq('mobile',reg.mobile.trim()).single()
     if (dup) { setRerr('Mobile number already registered.'); setRload(false); return }
 
     const { data, error } = await supabase.auth.signUp({
@@ -97,7 +76,7 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
     })
     if (error||!data.user) { setRerr(error?.message??'Registration failed.'); setRload(false); return }
 
-    await supabase.from('users').upsert({
+    await supabase.from('users').insert({
       id:             data.user.id,
       personnel_type: reg.type as any,
       rank:           reg.type==='Military' ? reg.rank  : null,
@@ -107,8 +86,8 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
       appointment:    reg.appt.trim(),
       mobile:         reg.mobile.trim(),
       email:          reg.email.trim().toLowerCase(),
-      role:           'user',
-    }, { onConflict: 'id' })
+      role:           'personnel',
+    })
 
     setMsg('Registered! Check your email to confirm, then sign in.')
     setScreen('login')

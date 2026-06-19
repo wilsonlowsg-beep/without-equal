@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User } from '@/types/database'
-import { displayName, isProfileComplete, normalizeRole, userMetaLine } from '@/lib/constants'
+import { displayName, lastName, GROUPS } from '@/lib/constants'
 import SubmitStatus from './SubmitStatus'
 import MyHistory from './MyHistory'
 import GroupDashboard from './GroupDashboard'
@@ -11,14 +11,14 @@ import FormationDashboard from './FormationDashboard'
 import TrendsView from './TrendsView'
 import AdminDashboard from './AdminDashboard'
 import LeaveManager from './LeaveManager'
-import ProfileCompletion from './ProfileCompletion'
 
 type Tab = 'status' | 'history' | 'leave' | 'group' | 'formation' | 'trends' | 'admin'
 
 const ROLE_TABS: Record<string, {key:Tab;label:string}[]> = {
-  user:      [{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
-  commander: [{key:'group',label:'My Group'},{key:'formation',label:'Formation'},{key:'trends',label:'Trends'},{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
-  admin:     [{key:'admin',label:'Admin'},{key:'formation',label:'Dashboard'},{key:'trends',label:'Trends'}],
+  personnel: [{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
+  grouphead: [{key:'group',label:'My Group'},{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
+  ac3:       [{key:'formation',label:'Formation'},{key:'trends',label:'Trends'}],
+  admin:     [{key:'admin',label:'Admin'},{key:'formation',label:'Dashboard'}],
 }
 
 function Clock() {
@@ -35,13 +35,12 @@ function Toast({ msg, onDone }: { msg: string; onDone: ()=>void }) {
   return <div className="we-toast-wrap"><div className="we-toast">{msg}</div></div>
 }
 
-export default function AppShell({ user, onLogout, onUserUpdate }: { user: User; onLogout: ()=>void; onUserUpdate:(user:User)=>void }) {
+export default function AppShell({ user, onLogout }: { user: User; onLogout: ()=>void }) {
   const [toast, setToast]   = useState<string|null>(null)
   const supabase = createClient()
-  const appRole = normalizeRole(user.role)
-  const defaultTab = ROLE_TABS[appRole]?.[0]?.key ?? 'status'
+  const defaultTab = ROLE_TABS[user.role]?.[0]?.key ?? 'status'
   const [activeTab, setTab] = useState<Tab>(defaultTab)
-  const tabs = ROLE_TABS[appRole] ?? []
+  const tabs = ROLE_TABS[user.role] ?? []
 
   const showToast = (msg: string) => { setToast(null); setTimeout(()=>setToast(msg),10) }
 
@@ -50,9 +49,7 @@ export default function AppShell({ user, onLogout, onUserUpdate }: { user: User;
     onLogout()
   }
 
-  if (!isProfileComplete(user)) {
-    return <ProfileCompletion user={user} onComplete={onUserUpdate} onLogout={handleLogout} />
-  }
+  const grpName = GROUPS.find(g=>g.id===user.group_id)?.name ?? ''
 
   const renderContent = () => {
     switch(activeTab) {
@@ -77,7 +74,7 @@ export default function AppShell({ user, onLogout, onUserUpdate }: { user: User;
           <Clock />
         </div>
         <div className="we-rule" />
-        <div className="we-userline">{displayName(user)} · {userMetaLine(user)}</div>
+        <div className="we-userline">{displayName(user)} · {grpName} · {user.appointment}</div>
       </div>
 
       {/* NAV */}

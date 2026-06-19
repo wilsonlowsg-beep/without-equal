@@ -108,75 +108,17 @@ export function nextWorkingDay(): string {
   return d.toISOString().slice(0, 10)
 }
 
-export function displayName(u: { personnel_type: string; rank?: string | null; title?: string | null; full_name?: string | null; email?: string | null } | null | undefined): string {
+export function displayName(u: { personnel_type: string; rank?: string; title?: string; full_name: string } | null | undefined): string {
   if (!u) return ''
-  const fullName = cleanProfileValue((u as any).full_name) || emailUsername((u as any).email) || 'Profile incomplete'
-  const prefix = u.personnel_type === 'Military'
-    ? cleanProfileValue(u.rank)
-    : cleanProfileValue(u.title)
-  return [prefix, fullName].filter(Boolean).join(' ')
+  return u.personnel_type === 'Military'
+    ? `${u.rank} ${u.full_name}`
+    : `${u.title} ${u.full_name}`
 }
 
-export function lastName(u: { full_name?: string | null; email?: string | null } | null | undefined): string {
+export function lastName(u: { full_name: string } | null | undefined): string {
   if (!u) return ''
-  const name = cleanProfileValue(u.full_name) || emailUsername(u.email)
-  if (!name) return ''
-  const parts = name.trim().split(' ')
+  const parts = u.full_name.trim().split(' ')
   return parts[parts.length - 1]
-}
-
-export type AppRole = 'admin' | 'commander' | 'user'
-
-export function normalizeRole(role: string | null | undefined): AppRole {
-  if (role === 'admin') return 'admin'
-  if (role === 'commander' || role === 'grouphead' || role === 'ac3') return 'commander'
-  return 'user'
-}
-
-export function cleanProfileValue(value: string | null | undefined): string {
-  if (!value) return ''
-  const trimmed = String(value).trim()
-  const lower = trimmed.toLowerCase()
-  if (!trimmed || lower === 'null' || lower === 'pending profile' || lower === 'pending onboarding' || lower === 'profile incomplete') return ''
-  return trimmed
-}
-
-export function emailUsername(email: string | null | undefined): string {
-  const clean = cleanProfileValue(email)
-  return clean ? clean.split('@')[0] : ''
-}
-
-export function profileStatusText(appointment: string | null | undefined): string {
-  const clean = cleanProfileValue(appointment)
-  if (!clean || clean === 'Pending onboarding') return 'Profile incomplete'
-  return clean
-}
-
-export function isProfileComplete(u: {
-  personnel_type?: string | null
-  rank?: string | null
-  title?: string | null
-  full_name?: string | null
-  appointment?: string | null
-  mobile?: string | null
-} | null | undefined): boolean {
-  if (!u) return false
-  const hasName = Boolean(cleanProfileValue(u.full_name))
-  const hasAppointment = Boolean(cleanProfileValue(u.appointment)) && profileStatusText(u.appointment) !== 'Profile incomplete'
-  const hasMobile = Boolean(cleanProfileValue(u.mobile)) && !cleanProfileValue(u.mobile).startsWith('auth-')
-  const hasRankOrTitle = u.personnel_type === 'Civilian'
-    ? Boolean(cleanProfileValue(u.title))
-    : Boolean(cleanProfileValue(u.rank))
-  return hasName && hasAppointment && hasMobile && hasRankOrTitle
-}
-
-export function userMetaLine(u: {
-  group_id?: number | null
-  appointment?: string | null
-} | null | undefined): string {
-  if (!u) return ''
-  const groupName = GROUPS.find(g => g.id === u.group_id)?.name
-  return [groupName, profileStatusText(u.appointment)].filter(Boolean).join(' · ')
 }
 
 export function isDateInRange(date: string, start: string, end: string): boolean {

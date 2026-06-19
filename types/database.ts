@@ -1,4 +1,4 @@
-export type Role = 'user' | 'commander' | 'admin'
+export type Role = 'personnel' | 'grouphead' | 'ac3' | 'admin'
 export type PersonnelType = 'Military' | 'Civilian'
 export type LeaveType = 'Local Leave' | 'Overseas Leave' | 'Time Off'
 export type LeaveStatus = 'pending' | 'approved' | 'cancelled'
@@ -12,13 +12,12 @@ export interface Group {
 export interface User {
   id: string
   personnel_type: PersonnelType
-  rank?: string | null
-  title?: string | null
+  rank?: string
+  title?: string
   full_name: string
   group_id: number
   appointment: string
   mobile: string
-  email?: string | null
   role: Role
   is_active: boolean
   created_at: string

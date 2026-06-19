@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { GroupStats, User, LeavePeriod } from '@/types/database'
-import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, profileStatusText, statusColor, AVAILABLE_STATUSES } from '@/lib/constants'
+import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES } from '@/lib/constants'
 
 export default function FormationDashboard({ showToast }: { showToast: (m:string)=>void }) {
   const [stats,    setStats]    = useState<GroupStats[]>([])
@@ -280,7 +280,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
               <div className="we-dot" style={{background:sub?statusColor(sub.status):'var(--red)'}} />
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:500}}>{displayName(u)}</div>
-                <div style={{fontSize:10,color:'var(--dim)'}}>{grp} · {profileStatusText(u.appointment)}</div>
+                <div style={{fontSize:10,color:'var(--dim)'}}>{grp} · {u.appointment}</div>
               </div>
               {sub
                 ? <span className="we-chip" style={{background:statusColor(sub.status)+'18',color:statusColor(sub.status),border:`1px solid ${statusColor(sub.status)}33`,fontSize:10}}>{sub.is_auto?'🤖 ':''}{sub.status}</span>

@@ -28,7 +28,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
       .select('*')
       .eq('user_id', user.id)
       .eq('submission_date', today)
-      .maybeSingle()
+      .single()
 
     // Check if on approved leave today
     const { data: leaves } = await supabase

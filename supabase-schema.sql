@@ -1,12 +1,12 @@
 -- ============================================================
--- WITHOUT EQUAL - Daily Readiness System
+-- WITHOUT EQUAL — Daily Readiness System
 -- Database Schema + Security
 -- Run entirely in Supabase SQL Editor
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- GROUPS
+-- ── GROUPS ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS groups (
   id         INTEGER PRIMARY KEY,
   name       TEXT NOT NULL,
@@ -22,69 +22,23 @@ INSERT INTO groups (id, name, short_name) VALUES
   (5, 'Plans',   'PLN')
 ON CONFLICT (id) DO NOTHING;
 
--- USERS
+-- ── USERS ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
   id             UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  personnel_type TEXT NOT NULL DEFAULT 'Military'
-                 CHECK (personnel_type IN ('Military','Civilian')),
+  personnel_type TEXT NOT NULL CHECK (personnel_type IN ('Military','Civilian')),
   rank           TEXT,
   title          TEXT,
   full_name      TEXT NOT NULL,
-  group_id       INTEGER NOT NULL DEFAULT 1 REFERENCES groups(id),
-  appointment    TEXT NOT NULL DEFAULT 'Profile incomplete',
+  group_id       INTEGER NOT NULL REFERENCES groups(id),
+  appointment    TEXT NOT NULL,
   mobile         TEXT UNIQUE NOT NULL,
-  email          TEXT,
-  role           TEXT NOT NULL DEFAULT 'user'
-                 CHECK (role IN ('user','commander','admin')),
+  role           TEXT NOT NULL DEFAULT 'personnel'
+                 CHECK (role IN ('personnel','grouphead','ac3','admin')),
   is_active      BOOLEAN NOT NULL DEFAULT TRUE,
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Compatibility migration for older deployments.
-ALTER TABLE users ADD COLUMN IF NOT EXISTS appointment TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS mobile TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
-ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
-
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-
-UPDATE users
-SET role = CASE
-  WHEN role = 'admin' THEN 'admin'
-  WHEN role IN ('commander','grouphead','ac3') THEN 'commander'
-  ELSE 'user'
-END;
-
-UPDATE users SET personnel_type = 'Military' WHERE personnel_type IS NULL;
-UPDATE users SET full_name = COALESCE(NULLIF(full_name, ''), NULLIF(SPLIT_PART(email, '@', 1), ''), 'Profile incomplete') WHERE full_name IS NULL OR full_name = '';
-UPDATE users SET group_id = 1 WHERE group_id IS NULL;
-UPDATE users SET appointment = 'Profile incomplete' WHERE appointment IS NULL OR appointment = '' OR appointment = 'Pending onboarding';
-UPDATE users SET mobile = 'auth-' || LEFT(id::TEXT, 8) WHERE mobile IS NULL OR mobile = '';
-UPDATE users SET role = 'user' WHERE role IS NULL;
-UPDATE users SET is_active = TRUE WHERE is_active IS NULL;
-UPDATE users SET created_at = NOW() WHERE created_at IS NULL;
-
-ALTER TABLE users ALTER COLUMN personnel_type SET DEFAULT 'Military';
-ALTER TABLE users ALTER COLUMN personnel_type SET NOT NULL;
-ALTER TABLE users ALTER COLUMN full_name SET NOT NULL;
-ALTER TABLE users ALTER COLUMN group_id SET DEFAULT 1;
-ALTER TABLE users ALTER COLUMN group_id SET NOT NULL;
-ALTER TABLE users ALTER COLUMN appointment SET DEFAULT 'Profile incomplete';
-ALTER TABLE users ALTER COLUMN appointment SET NOT NULL;
-ALTER TABLE users ALTER COLUMN mobile SET NOT NULL;
-ALTER TABLE users ALTER COLUMN role SET DEFAULT 'user';
-ALTER TABLE users ALTER COLUMN role SET NOT NULL;
-ALTER TABLE users ALTER COLUMN is_active SET DEFAULT TRUE;
-ALTER TABLE users ALTER COLUMN is_active SET NOT NULL;
-
-ALTER TABLE users ADD CONSTRAINT users_role_check
-  CHECK (role IN ('user','commander','admin'));
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_mobile_unique ON users(mobile);
-
--- DAILY SUBMISSIONS
+-- ── DAILY SUBMISSIONS ────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS daily_submissions (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -100,7 +54,7 @@ CREATE TABLE IF NOT EXISTS daily_submissions (
   UNIQUE(user_id, submission_date)
 );
 
--- LEAVE PERIODS
+-- ── LEAVE PERIODS ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS leave_periods (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -119,7 +73,7 @@ CREATE TABLE IF NOT EXISTS leave_periods (
   CONSTRAINT valid_dates CHECK (end_date >= start_date)
 );
 
--- GROUP REVIEWS
+-- ── GROUP REVIEWS ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS group_reviews (
   id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   group_id    INTEGER NOT NULL REFERENCES groups(id),
@@ -129,22 +83,19 @@ CREATE TABLE IF NOT EXISTS group_reviews (
   UNIQUE(group_id, review_date)
 );
 
--- AUDIT LOG
+-- ── AUDIT LOG ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_log (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id    UUID REFERENCES users(id),
   action     TEXT NOT NULL,
-  table_name TEXT,
-  record_id  UUID,
   old_value  JSONB,
   new_value  JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS table_name TEXT;
-ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS record_id UUID;
-
+-- ============================================================
 -- INDEXES
+-- ============================================================
 CREATE INDEX IF NOT EXISTS idx_subs_user_date ON daily_submissions(user_id, submission_date);
 CREATE INDEX IF NOT EXISTS idx_subs_date      ON daily_submissions(submission_date);
 CREATE INDEX IF NOT EXISTS idx_leave_user     ON leave_periods(user_id);
@@ -152,7 +103,10 @@ CREATE INDEX IF NOT EXISTS idx_leave_dates    ON leave_periods(start_date, end_d
 CREATE INDEX IF NOT EXISTS idx_users_group    ON users(group_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_date   ON group_reviews(review_date);
 
--- ROLE HELPERS
+-- ============================================================
+-- SECURITY — Role helper functions
+-- ============================================================
+
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS TEXT AS $$
   SELECT role FROM users WHERE id = auth.uid() AND is_active = TRUE;
@@ -163,104 +117,56 @@ RETURNS INTEGER AS $$
   SELECT group_id FROM users WHERE id = auth.uid() AND is_active = TRUE;
 $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
+-- ============================================================
 -- ROW LEVEL SECURITY
+-- ============================================================
+
 ALTER TABLE users             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leave_periods     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE group_reviews     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log         ENABLE ROW LEVEL SECURITY;
 
--- USERS POLICIES
-DROP POLICY IF EXISTS "u_own"             ON users;
-DROP POLICY IF EXISTS "u_grouphead"       ON users;
-DROP POLICY IF EXISTS "u_ac3_admin"       ON users;
-DROP POLICY IF EXISTS "u_commander_group" ON users;
-DROP POLICY IF EXISTS "u_admin_all"       ON users;
-DROP POLICY IF EXISTS "u_update_own"      ON users;
-DROP POLICY IF EXISTS "u_insert_own"      ON users;
-DROP POLICY IF EXISTS "u_admin_write"     ON users;
+-- ── USERS ────────────────────────────────────────────────────
+-- Drop existing policies cleanly
+DROP POLICY IF EXISTS "u_own"        ON users;
+DROP POLICY IF EXISTS "u_grouphead"  ON users;
+DROP POLICY IF EXISTS "u_ac3_admin"  ON users;
+DROP POLICY IF EXISTS "u_update_own" ON users;
+DROP POLICY IF EXISTS "u_admin_write"ON users;
 
+-- Personnel: only see themselves
 CREATE POLICY "u_own" ON users
   FOR SELECT USING (id = auth.uid());
 
-CREATE POLICY "u_commander_group" ON users
+-- Group Head: see own group
+CREATE POLICY "u_grouphead" ON users
   FOR SELECT USING (
-    get_my_role() = 'commander'
+    get_my_role() = 'grouphead'
     AND group_id = get_my_group()
   );
 
-CREATE POLICY "u_admin_all" ON users
-  FOR ALL USING (get_my_role() = 'admin')
-  WITH CHECK (get_my_role() = 'admin');
+-- AC3 + Admin: see everyone
+CREATE POLICY "u_ac3_admin" ON users
+  FOR SELECT USING (get_my_role() IN ('ac3','admin'));
 
+-- Anyone: update own non-sensitive fields
 CREATE POLICY "u_update_own" ON users
-  FOR UPDATE USING (id = auth.uid())
-  WITH CHECK (id = auth.uid());
+  FOR UPDATE USING (id = auth.uid());
 
-CREATE POLICY "u_insert_own" ON users
-  FOR INSERT WITH CHECK (id = auth.uid() AND role = 'user');
+-- Admin only: insert, change roles, deactivate
+CREATE POLICY "u_admin_write" ON users
+  FOR ALL USING (get_my_role() = 'admin');
 
--- Auth user auto-provisioning.
-CREATE OR REPLACE FUNCTION handle_new_auth_user()
-RETURNS TRIGGER AS $$
-BEGIN
-  INSERT INTO users (
-    id,
-    personnel_type,
-    rank,
-    title,
-    full_name,
-    group_id,
-    appointment,
-    mobile,
-    email,
-    role,
-    is_active
-  )
-  VALUES (
-    NEW.id,
-    'Military',
-    NULL,
-    NULL,
-    COALESCE(
-      NULLIF(NEW.raw_user_meta_data->>'full_name', ''),
-      NULLIF(NEW.raw_user_meta_data->>'name', ''),
-      NULLIF(SPLIT_PART(NEW.email, '@', 1), ''),
-      'Profile incomplete'
-    ),
-    1,
-    'Profile incomplete',
-    COALESCE(NULLIF(NEW.phone, ''), 'auth-' || LEFT(NEW.id::TEXT, 8)),
-    NEW.email,
-    'user',
-    TRUE
-  )
-  ON CONFLICT (id) DO NOTHING;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
-
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_auth_user();
-
+-- Block role self-promotion
 CREATE OR REPLACE FUNCTION block_role_escalation()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF (OLD.role != NEW.role OR OLD.is_active != NEW.is_active) THEN
+  IF (OLD.role != NEW.role OR OLD.group_id != NEW.group_id OR OLD.is_active != NEW.is_active) THEN
     IF get_my_role() != 'admin' THEN
-      RAISE EXCEPTION 'Only admins can change roles or active status';
+      RAISE EXCEPTION 'Only admins can change roles, groups, or active status';
     END IF;
   END IF;
-
-  IF (OLD.group_id != NEW.group_id AND auth.uid() != NEW.id) THEN
-    IF get_my_role() != 'admin' THEN
-      RAISE EXCEPTION 'Only admins can change another user group';
-    END IF;
-  END IF;
-
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -270,81 +176,86 @@ CREATE TRIGGER enforce_role_protection
   BEFORE UPDATE ON users
   FOR EACH ROW EXECUTE FUNCTION block_role_escalation();
 
--- DAILY SUBMISSIONS POLICIES
+-- ── DAILY SUBMISSIONS ────────────────────────────────────────
 DROP POLICY IF EXISTS "ds_own"       ON daily_submissions;
 DROP POLICY IF EXISTS "ds_grouphead" ON daily_submissions;
 DROP POLICY IF EXISTS "ds_ac3_admin" ON daily_submissions;
-DROP POLICY IF EXISTS "ds_commander" ON daily_submissions;
-DROP POLICY IF EXISTS "ds_admin"     ON daily_submissions;
 
+-- Own submissions
 CREATE POLICY "ds_own" ON daily_submissions
   FOR ALL USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
-CREATE POLICY "ds_commander" ON daily_submissions
+-- Group Head: read own group's submissions
+CREATE POLICY "ds_grouphead" ON daily_submissions
   FOR SELECT USING (
-    get_my_role() = 'commander'
+    get_my_role() = 'grouphead'
     AND user_id IN (
       SELECT id FROM users WHERE group_id = get_my_group()
     )
   );
 
-CREATE POLICY "ds_admin" ON daily_submissions
-  FOR SELECT USING (get_my_role() = 'admin');
+-- AC3 + Admin: read all submissions
+CREATE POLICY "ds_ac3_admin" ON daily_submissions
+  FOR SELECT USING (get_my_role() IN ('ac3','admin'));
 
--- LEAVE PERIODS POLICIES
+-- ── LEAVE PERIODS ────────────────────────────────────────────
 DROP POLICY IF EXISTS "lp_own"       ON leave_periods;
 DROP POLICY IF EXISTS "lp_grouphead" ON leave_periods;
 DROP POLICY IF EXISTS "lp_ac3_admin" ON leave_periods;
 DROP POLICY IF EXISTS "lp_manage"    ON leave_periods;
-DROP POLICY IF EXISTS "lp_commander" ON leave_periods;
-DROP POLICY IF EXISTS "lp_admin"     ON leave_periods;
 
+-- Own leave
 CREATE POLICY "lp_own" ON leave_periods
   FOR ALL USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
-CREATE POLICY "lp_commander" ON leave_periods
+-- Group Head: read own group's leave
+CREATE POLICY "lp_grouphead" ON leave_periods
   FOR SELECT USING (
-    get_my_role() = 'commander'
+    get_my_role() = 'grouphead'
     AND user_id IN (
       SELECT id FROM users WHERE group_id = get_my_group()
     )
   );
 
-CREATE POLICY "lp_admin" ON leave_periods
-  FOR SELECT USING (get_my_role() = 'admin');
+-- AC3 + Admin: read all leave
+CREATE POLICY "lp_ac3_admin" ON leave_periods
+  FOR SELECT USING (get_my_role() IN ('ac3','admin'));
 
+-- Group Head + AC3 + Admin: can update (approve/cancel) leave
 CREATE POLICY "lp_manage" ON leave_periods
-  FOR UPDATE USING (get_my_role() IN ('commander','admin'));
+  FOR UPDATE USING (get_my_role() IN ('grouphead','ac3','admin'));
 
--- GROUP REVIEWS POLICIES
+-- ── GROUP REVIEWS ────────────────────────────────────────────
 DROP POLICY IF EXISTS "gr_grouphead" ON group_reviews;
 DROP POLICY IF EXISTS "gr_ac3_admin" ON group_reviews;
-DROP POLICY IF EXISTS "gr_commander" ON group_reviews;
-DROP POLICY IF EXISTS "gr_admin"     ON group_reviews;
 
-CREATE POLICY "gr_commander" ON group_reviews
+-- Group Head: manage own group review
+CREATE POLICY "gr_grouphead" ON group_reviews
   FOR ALL USING (
-    get_my_role() = 'commander'
+    get_my_role() = 'grouphead'
     AND group_id = get_my_group()
   )
   WITH CHECK (
-    get_my_role() = 'commander'
+    get_my_role() = 'grouphead'
     AND group_id = get_my_group()
   );
 
-CREATE POLICY "gr_admin" ON group_reviews
-  FOR SELECT USING (get_my_role() = 'admin');
+-- AC3 + Admin: read all reviews
+CREATE POLICY "gr_ac3_admin" ON group_reviews
+  FOR SELECT USING (get_my_role() IN ('ac3','admin'));
 
--- AUDIT LOG POLICIES
+-- ── AUDIT LOG ────────────────────────────────────────────────
 DROP POLICY IF EXISTS "al_read"   ON audit_log;
 DROP POLICY IF EXISTS "al_insert" ON audit_log;
 
-CREATE POLICY "al_read"   ON audit_log FOR SELECT USING (get_my_role() = 'admin');
+CREATE POLICY "al_read"   ON audit_log FOR SELECT USING (get_my_role() IN ('ac3','admin'));
 CREATE POLICY "al_insert" ON audit_log FOR INSERT WITH CHECK (TRUE);
 
+-- ============================================================
 -- FORMATION READINESS FUNCTION
+-- ============================================================
 CREATE OR REPLACE FUNCTION get_formation_readiness(target_date DATE DEFAULT CURRENT_DATE)
 RETURNS TABLE (
   group_id       INTEGER,
@@ -383,7 +294,7 @@ BEGIN
       WHERE gr.group_id = g.id AND gr.review_date = target_date
     )
   FROM groups g
-  JOIN users u ON u.group_id = g.id AND u.is_active = TRUE AND u.role != 'admin'
+  JOIN users u ON u.group_id = g.id AND u.is_active = TRUE AND u.role NOT IN ('admin')
   LEFT JOIN daily_submissions ds ON ds.user_id = u.id AND ds.submission_date = target_date
   WHERE g.id > 0
   GROUP BY g.id, g.name, g.short_name
@@ -391,7 +302,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- ============================================================
 -- AUTO-MARK LEAVE FUNCTION
+-- Call daily at 0000H via Supabase cron or Vercel cron
+-- ============================================================
 CREATE OR REPLACE FUNCTION auto_mark_leave(target_date DATE DEFAULT CURRENT_DATE)
 RETURNS INTEGER AS $$
 DECLARE
