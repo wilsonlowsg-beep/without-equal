@@ -9,7 +9,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
   const [stats,    setStats]    = useState<GroupStats[]>([])
   const [overseas, setOverseas] = useState<{user:User;leave:LeavePeriod}[]>([])
   const [returning,setReturning]= useState<{user:User;leave:LeavePeriod}[]>([])
-  const [retTomorrow,setRetTom] = useState<{user:User;leave:LeavePeriod}[]>([])
+  const [retTomorrow,setRetTomorrow] = useState<{user:User;leave:LeavePeriod}[]>([])
   const [notContac, setNotCon]  = useState<{user:User;leave:LeavePeriod}[]>([])
   const [allUsers, setAllUsers] = useState<User[]>([])
   const [allSubs,  setAllSubs]  = useState<any[]>([])
