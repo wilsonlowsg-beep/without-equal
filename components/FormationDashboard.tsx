@@ -52,7 +52,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
     setOverseas(overseas_now.map(l=>({user:l.user,leave:l})))
     setReturning(returning_today.map(l=>({user:l.user,leave:l})))
     setRetTomorrow(returning_tom.map(l=>({user:l.user,leave:l})))
-    setNotContac(not_contactable.map(l=>({user:l.user,leave:l})))
+    setNotCon(not_contactable.map(l=>({user:l.user,leave:l})))
     setLoading(false)
   }
 
