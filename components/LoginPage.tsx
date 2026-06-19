@@ -89,7 +89,7 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
       role:           'personnel',
     })
 
-    setMsg('Registered! Check your email to confirm, then sign in.')
+    setMsg('Registered successfully! Sign in with your email and password.')
     setScreen('login')
     setRload(false)
   }
@@ -205,9 +205,7 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
         {rload?'Registering…':'Register'}
       </button>
 
-      <div style={{marginTop:12,fontSize:11,color:'var(--faint)',textAlign:'center',lineHeight:1.6}}>
-        After registering, check your email to confirm your account before signing in.
-      </div>
+
     </div>
   )
 }
