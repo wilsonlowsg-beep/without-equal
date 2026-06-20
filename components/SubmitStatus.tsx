@@ -225,6 +225,23 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
               <button key={item} className={`we-sb${selected===item?' sel':''}`} style={{'--cat-color':cat.color} as any} onClick={()=>setSelected(item)}>{item}</button>
             ))}
           </div>
+          {cat.cat === 'Leave' && selected && LEAVE_STATUSES.includes(selected) && (
+            <div style={{display:'flex',alignItems:'center',gap:8,marginTop:8,padding:'8px 12px',background:'var(--surf-hi)',borderRadius:8,border:'1px solid var(--border)'}}>
+              <span style={{fontSize:12,color:'var(--dim)',whiteSpace:'nowrap',flexShrink:0}}>👤 Covered by</span>
+              <select
+                value={coverPerson}
+                onChange={e => setCoverP(e.target.value)}
+                style={{flex:1,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,color:coverPerson?'var(--text)':'var(--dim)',fontSize:12,padding:'5px 8px',fontFamily:'var(--sans)'}}
+              >
+                <option value="">— Optional —</option>
+                {personnel.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.personnel_type === 'Military' ? p.rank : p.title} {p.full_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       ))}
       {selected && MEDICAL_STATUSES.includes(selected) && (
@@ -238,23 +255,6 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
             onChange={e => setMedEnd(e.target.value)}
             style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:13,padding:'6px 10px',fontFamily:'var(--mono)',width:'100%'}}
           />
-        </div>
-      )}
-      {selected && LEAVE_STATUSES.includes(selected) && (
-        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,padding:'8px 12px',background:'var(--surf-hi)',borderRadius:8,border:'1px solid var(--border)'}}>
-          <span style={{fontSize:12,color:'var(--dim)',whiteSpace:'nowrap',flexShrink:0}}>👤 Covered by</span>
-          <select
-            value={coverPerson}
-            onChange={e => setCoverP(e.target.value)}
-            style={{flex:1,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,color:coverPerson?'var(--text)':'var(--dim)',fontSize:12,padding:'5px 8px',fontFamily:'var(--sans)'}}
-          >
-            <option value="">— Optional —</option>
-            {personnel.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.personnel_type === 'Military' ? p.rank : p.title} {p.full_name}
-              </option>
-            ))}
-          </select>
         </div>
       )}
       <div className="fg"><label className="we-label">Remarks</label>
@@ -331,39 +331,34 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
               <button key={item} className={`we-sb${selected===item?' sel':''}`} style={{'--cat-color':cat.color} as any} onClick={()=>setSelected(item)}>{item}</button>
             ))}
           </div>
-        </div>
-      ))}
-
-      {selected && LEAVE_STATUSES.includes(selected) && (
-        <div className="we-leave-panel" style={{padding:'10px 14px'}}>
-          {selected !== 'Time Off' && (
-            <div style={{marginBottom:10}}>
-              <div className="we-leave-panel-title" style={{marginBottom:4}}>Multi-day leave?</div>
-              <div style={{fontSize:12,color:'var(--dim)'}}>Use the <strong style={{color:'var(--amber)'}}>My Leave</strong> tab — you won't need to report daily during that period.</div>
+          {/* Leave panel + Covered By — injected inline right below the Leave buttons */}
+          {cat.cat === 'Leave' && selected && LEAVE_STATUSES.includes(selected) && (
+            <div className="we-leave-panel" style={{padding:'10px 14px',marginTop:8}}>
+              {selected !== 'Time Off' && (
+                <div style={{marginBottom:10}}>
+                  <div className="we-leave-panel-title" style={{marginBottom:4}}>Multi-day leave?</div>
+                  <div style={{fontSize:12,color:'var(--dim)'}}>Use the <strong style={{color:'var(--amber)'}}>My Leave</strong> tab — you won't need to report daily during that period.</div>
+                </div>
+              )}
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:12,color:'var(--dim)',whiteSpace:'nowrap',flexShrink:0}}>👤 Covered by</span>
+                <select
+                  value={coverPerson}
+                  onChange={e => setCoverP(e.target.value)}
+                  style={{flex:1,background:'var(--surf-hi)',border:'1px solid var(--border)',borderRadius:6,color:coverPerson?'var(--text)':'var(--dim)',fontSize:12,padding:'5px 8px',fontFamily:'var(--sans)'}}
+                >
+                  <option value="">— Optional —</option>
+                  {personnel.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.personnel_type === 'Military' ? p.rank : p.title} {p.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
-          {/* Covering person — inline, no extra clicks */}
-          <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <span style={{fontSize:12,color:'var(--dim)',whiteSpace:'nowrap',flexShrink:0}}>👤 Covered by</span>
-            <select
-              value={coverPerson}
-              onChange={e => setCoverP(e.target.value)}
-              style={{
-                flex:1, background:'var(--surf-hi)', border:'1px solid var(--border)',
-                borderRadius:6, color: coverPerson ? 'var(--text)' : 'var(--dim)',
-                fontSize:12, padding:'5px 8px', fontFamily:'var(--sans)',
-              }}
-            >
-              <option value="">— Optional —</option>
-              {personnel.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.personnel_type === 'Military' ? p.rank : p.title} {p.full_name}
-                </option>
-              ))}
-            </select>
-          </div>
         </div>
-      )}
+      ))}
 
       {selected && MEDICAL_STATUSES.includes(selected) && (
         <div style={{background:'rgba(220,53,69,0.06)',border:'1px solid rgba(220,53,69,0.2)',borderRadius:8,padding:'10px 14px',marginBottom:12}}>
