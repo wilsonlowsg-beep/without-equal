@@ -12,7 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { sendPush } from '@/lib/push'
+import { sendPush, StaleSubscriptionError } from '@/lib/push'
 
 const supabaseAdmin = () =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -95,6 +95,18 @@ export async function POST(req: NextRequest) {
         )
       )
     )
+
+    // Auto-delete stale subscriptions (expired, key-mismatch, 404/410)
+    const staleEndpoints = targetSubs
+      .filter((_: any, i: number) => {
+        const r = results[i]
+        return r.status === 'rejected' && (r as any).reason instanceof StaleSubscriptionError
+      })
+      .map((s: any) => s.endpoint)
+    if (staleEndpoints.length) {
+      await db.from('push_subscriptions').delete().in('endpoint', staleEndpoints)
+      console.log(`[push/send-now] Deleted ${staleEndpoints.length} stale subscription(s)`)
+    }
 
     const sent    = results.filter(r => r.status === 'fulfilled').length
     const failed  = results.filter(r => r.status === 'rejected').length

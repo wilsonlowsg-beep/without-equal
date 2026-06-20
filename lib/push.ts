@@ -89,6 +89,14 @@ export async function encryptPayload(p256dhB64: string, authB64: string, plainte
   return final.buffer.slice(final.byteOffset, final.byteOffset + final.byteLength) as ArrayBuffer
 }
 
+/** Signals that a subscription is permanently invalid and should be deleted */
+export class StaleSubscriptionError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'StaleSubscriptionError'
+  }
+}
+
 export async function sendPush(
   subscription: { endpoint: string; p256dh: string; auth: string },
   payload: string,
@@ -114,7 +122,16 @@ export async function sendPush(
     body: encrypted,
   })
 
-  if (!res.ok && res.status !== 201) {
-    throw new Error(`Push failed: ${res.status} ${await res.text()}`)
-  }
+  if (res.ok || res.status === 201) return
+
+  const body = await res.text()
+  // 410 Gone, 404, or key-mismatch errors mean the subscription is permanently invalid
+  const isStale =
+    res.status === 410 ||
+    res.status === 404 ||
+    body.includes('VapidPkHashMismatch') ||
+    body.includes('BadVapidPublicKey') ||
+    body.includes('UnauthorizedRegistration')
+  if (isStale) throw new StaleSubscriptionError(`Push failed: ${res.status} ${body}`)
+  throw new Error(`Push failed: ${res.status} ${body}`)
 }
