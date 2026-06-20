@@ -37,6 +37,7 @@ export interface DailySubmission {
   amended_at?: string
   is_auto: boolean
   auto_reason?: string
+  medical_end_date?: string  // MC / Attend B/C expiry date
   // joined
   user?: User
 }

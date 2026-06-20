@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod, GroupReview } from '@/types/database'
-import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES } from '@/lib/constants'
+import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel } from '@/lib/constants'
 
 interface PersonnelRow {
   user: User
@@ -158,7 +158,12 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
               <div className="we-dot" style={{background:'var(--red)'}} />
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:500}}>{displayName(r.user)}</div>
-                {r.sub?.remarks && <div style={{fontSize:11,color:'var(--dim)'}}>{r.sub.remarks}</div>}
+                {r.sub?.medical_end_date && (
+                  <div style={{fontSize:11,color:'var(--red)',fontWeight:600,marginTop:2}}>
+                    🏥 {medicalDurationLabel(r.sub.medical_end_date)}
+                  </div>
+                )}
+                {r.sub?.remarks && <div style={{fontSize:11,color:'var(--dim)',marginTop:2}}>{r.sub.remarks}</div>}
               </div>
             </div>
           ))}
@@ -211,8 +216,15 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
           {attendBRows.map(r => (
             <div className="we-row" key={r.user.id}>
               <div className="we-dot" style={{background:'#FF8080'}} />
-              <div style={{flex:1,fontSize:13}}>{displayName(r.user)}</div>
-              {r.sub?.remarks && <div style={{fontSize:11,color:'var(--dim)'}}>{r.sub.remarks}</div>}
+              <div style={{flex:1}}>
+                <div style={{fontSize:13}}>{displayName(r.user)}</div>
+                {r.sub?.medical_end_date && (
+                  <div style={{fontSize:11,color:'var(--amber)',marginTop:2}}>
+                    🏥 {medicalDurationLabel(r.sub.medical_end_date)}
+                  </div>
+                )}
+                {r.sub?.remarks && <div style={{fontSize:11,color:'var(--dim)',marginTop:2}}>{r.sub.remarks}</div>}
+              </div>
             </div>
           ))}
         </div>

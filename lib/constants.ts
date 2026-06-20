@@ -136,6 +136,24 @@ export function isDateInRange(date: string, start: string, end: string): boolean
   return date >= start && date <= end
 }
 
+export const MEDICAL_STATUSES = ['Attend B', 'Attend C']
+
+/** Returns days remaining until medical_end_date (0 = today, negative = expired) */
+export function medicalDaysRemaining(endDate: string): number {
+  const today = new Date(todayStr())
+  const end   = new Date(endDate)
+  return Math.round((end.getTime() - today.getTime()) / 86400000)
+}
+
+/** "Until 25 Jun · 3 days" or "Until 25 Jun · Expires today" or "Expired 2 days ago" */
+export function medicalDurationLabel(endDate: string): string {
+  const days = medicalDaysRemaining(endDate)
+  const label = new Date(endDate + 'T00:00:00').toLocaleDateString('en-SG', { day:'2-digit', month:'short' })
+  if (days < 0)  return `Expired ${Math.abs(days)}d ago`
+  if (days === 0) return `Until ${label} · Expires today`
+  return `Until ${label} · ${days}d remaining`
+}
+
 export function formatDate(date: string): string {
   return new Date(date + 'T00:00:00').toLocaleDateString('en-SG', {
     day: '2-digit', month: 'short', year: 'numeric'

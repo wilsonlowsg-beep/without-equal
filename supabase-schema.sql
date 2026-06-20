@@ -303,6 +303,13 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
+-- MIGRATION: Medical end date
+-- Run once in Supabase SQL Editor if upgrading an existing deployment
+-- ============================================================
+ALTER TABLE daily_submissions
+  ADD COLUMN IF NOT EXISTS medical_end_date DATE;
+
+-- ============================================================
 -- AUTO-MARK LEAVE FUNCTION
 -- Call daily at 0000H via Supabase cron or Vercel cron
 -- ============================================================

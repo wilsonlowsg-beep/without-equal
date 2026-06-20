@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod } from '@/types/database'
-import { STATUS_CATS, statusColor, todayStr, tomorrowStr, isPastCutoff, LEAVE_STATUSES, formatDate, PRE_REPORT_HOUR } from '@/lib/constants'
+import { STATUS_CATS, statusColor, todayStr, tomorrowStr, isPastCutoff, LEAVE_STATUSES, formatDate, PRE_REPORT_HOUR, MEDICAL_STATUSES } from '@/lib/constants'
 
 export default function SubmitStatus({ user, showToast }: { user: User; showToast: (m:string)=>void }) {
   const [todaySub,    setTodaySub]  = useState<DailySubmission|null>(null)
@@ -16,6 +16,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
   const [loading,     setLoading]   = useState(true)
   const [saving,      setSaving]    = useState(false)
   const [preReport,   setPreReport] = useState(false) // true = submitting for tomorrow
+  const [medEndDate,  setMedEnd]    = useState('')    // MC/medical expiry date
   const supabase = createClient()
   const today    = todayStr()
   const tomorrow = tomorrowStr()
@@ -56,13 +57,14 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
     setAutoLeave(activeleave)
     setTodaySub(sub)
     setTomSub(tomSub)
-    if (sub) { setSelected(sub.status); setRemarks(sub.remarks ?? '') }
+    if (sub) { setSelected(sub.status); setRemarks(sub.remarks ?? ''); setMedEnd(sub.medical_end_date ?? '') }
     setLoading(false)
   }
 
   const submit = async () => {
     setSaving(true)
     const now = new Date()
+    const isMedical = MEDICAL_STATUSES.includes(selected!)
     const { data, error } = await supabase
       .from('daily_submissions')
       .upsert({
@@ -73,6 +75,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
         submitted_at: now.toISOString(),
         is_amended: false,
         is_auto: false,
+        medical_end_date: isMedical && medEndDate ? medEndDate : null,
       }, { onConflict: 'user_id,submission_date' })
       .select()
       .single()
@@ -80,7 +83,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
     if (!error) {
       if (preReport) { setTomSub(data); showToast(`Pre-report for ${tomorrow} submitted ✓`) }
       else           { setTodaySub(data); showToast('Status submitted ✓') }
-      setSelected(null); setRemarks('')
+      setSelected(null); setRemarks(''); setMedEnd('')
     } else showToast('Error: ' + error.message)
     setSaving(false)
   }
@@ -89,6 +92,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
     if (!amendReason.trim()) return
     setSaving(true)
     const now = new Date()
+    const isMedical = MEDICAL_STATUSES.includes(selected!)
     const { data, error } = await supabase
       .from('daily_submissions')
       .upsert({
@@ -101,6 +105,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
         amend_reason: amendReason,
         amended_at: now.toISOString(),
         is_auto: false,
+        medical_end_date: isMedical && medEndDate ? medEndDate : null,
       }, { onConflict: 'user_id,submission_date' })
       .select().single()
 
@@ -212,6 +217,19 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
           </div>
         </div>
       ))}
+      {selected && MEDICAL_STATUSES.includes(selected) && (
+        <div style={{background:'rgba(220,53,69,0.06)',border:'1px solid rgba(220,53,69,0.2)',borderRadius:8,padding:'10px 14px',marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:600,color:'var(--red)',marginBottom:8,fontFamily:'var(--mono)',letterSpacing:'0.05em'}}>MEDICAL DETAILS</div>
+          <label style={{fontSize:12,color:'var(--dim)',display:'block',marginBottom:6}}>MC / Medical until</label>
+          <input
+            type="date"
+            value={medEndDate}
+            min={today}
+            onChange={e => setMedEnd(e.target.value)}
+            style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:13,padding:'6px 10px',fontFamily:'var(--mono)',width:'100%'}}
+          />
+        </div>
+      )}
       <div className="fg"><label className="we-label">Remarks</label>
         <textarea className="we-input we-textarea" value={remarks} onChange={e=>setRemarks(e.target.value)} /></div>
       <div style={{display:'flex',gap:8}}>
@@ -293,6 +311,30 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
         <div className="we-leave-panel">
           <div className="we-leave-panel-title">Leave details — submit via My Leave tab for multi-day leave</div>
           <div style={{fontSize:12,color:'var(--dim)'}}>For single-day: add remarks below. For multi-day leave that covers future dates, use the <strong style={{color:'var(--amber)'}}>My Leave</strong> tab to register your leave period — you won't need to report daily during that period.</div>
+        </div>
+      )}
+
+      {selected && MEDICAL_STATUSES.includes(selected) && (
+        <div style={{background:'rgba(220,53,69,0.06)',border:'1px solid rgba(220,53,69,0.2)',borderRadius:8,padding:'10px 14px',marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:600,color:'var(--red)',marginBottom:8,fontFamily:'var(--mono)',letterSpacing:'0.05em'}}>MEDICAL DETAILS</div>
+          <label style={{fontSize:12,color:'var(--dim)',display:'block',marginBottom:6}}>MC / Medical until <span style={{color:'var(--red)'}}>*</span></label>
+          <input
+            type="date"
+            value={medEndDate}
+            min={today}
+            onChange={e => setMedEnd(e.target.value)}
+            style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:13,padding:'6px 10px',fontFamily:'var(--mono)',width:'100%'}}
+          />
+          {medEndDate && (
+            <div style={{fontSize:11,color:'var(--dim)',marginTop:6}}>
+              {(() => {
+                const days = Math.round((new Date(medEndDate).getTime() - new Date(today).getTime()) / 86400000)
+                if (days === 0) return '⚠ Expires today'
+                if (days === 1) return '1 day'
+                return `${days} days`
+              })()}
+            </div>
+          )}
         </div>
       )}
 

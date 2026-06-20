@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { GroupStats, User, LeavePeriod } from '@/types/database'
-import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES } from '@/lib/constants'
+import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, medicalDurationLabel } from '@/lib/constants'
 
 export default function FormationDashboard({ showToast }: { showToast: (m:string)=>void }) {
   const [stats,    setStats]    = useState<GroupStats[]>([])
@@ -103,11 +103,16 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
     ...(returning.length>0?['Returning Today:',...returning.map(r=>`  · ${displayName(r.user)}`)]:[]),
     ...(retTomorrow.length>0?['Returning Tomorrow:',...retTomorrow.map(r=>`  · ${displayName(r.user)}`)]:[]),
     '─────────────────────────','Command Attention:',
-    ...(attC>0?[`  ⚠ [RED] ${attC} Attend C case(s)`]:[]),
+    // Attend C per-person lines added below
     ...(notContac.length>0?[`  ⚠ [RED] ${notContac.length} overseas not contactable: ${notContac.map(n=>displayName(n.user)).join(', ')}`]:[]),
     ...(pending>0?[`  ⚠ ${pending} personnel not reported`]:[]),
     ...(retTomorrow.length>0?[`  ℹ [AMBER] ${retTomorrow.length} returning tomorrow`]:[]),
     ...(unreviewed.length>0?[`  ℹ [AMBER] Groups pending review: ${unreviewed.map(g=>g.group_short).join(', ')}`]:[]),
+    ...(attC > 0 ? allSubs.filter((s:any)=>s.status==='Attend C').map((s:any)=>{
+      const u = allUsers.find(u=>u.id===s.user_id)
+      const med = s.medical_end_date ? ` [MC until ${s.medical_end_date}]` : ''
+      return `  ⚠ [RED] Attend C: ${u?displayName(u):'Unknown'}${med}`
+    }) : []),
     ...(attC===0&&notContac.length===0&&pending===0&&unreviewed.length===0?['  ✓ Nil. Formation fully reported and reviewed.']:[]),
     '─────────────────────────','WITHOUT EQUAL',
   ].join('\n')
@@ -366,7 +371,24 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
       <div className={`we-card ${attC>0||notContac.length>0?'red':retTomorrow.length>0||unreviewed.length>0?'amber':'green'}`}>
         <div className={`we-clabel ${attC>0||notContac.length>0?'cl-red':retTomorrow.length>0||unreviewed.length>0?'cl-amber':'cl-green'}`}>◆ Command Attention</div>
 
-        {attC > 0 && <div className="we-alert"><div className="we-alert-dot" style={{background:'var(--red)'}}/><div><div className="we-alert-text"><strong>Attend C:</strong> {attC} case{attC>1?'s':''}</div></div></div>}
+        {attC > 0 && (
+          <div>
+            {allSubs.filter(s=>s.status==='Attend C').map((s:any) => {
+              const u = allUsers.find(u=>u.id===s.user_id)
+              if (!u) return null
+              return (
+                <div key={s.user_id} className="we-alert">
+                  <div className="we-alert-dot" style={{background:'var(--red)'}}/>
+                  <div>
+                    <div className="we-alert-text"><strong>Attend C:</strong> {displayName(u)}</div>
+                    {s.medical_end_date && <div className="we-alert-sub">🏥 {medicalDurationLabel(s.medical_end_date)}</div>}
+                    {s.remarks && <div className="we-alert-sub">{s.remarks}</div>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
         {notContac.map(n=>(
           <div key={n.user.id} className="we-alert"><div className="we-alert-dot" style={{background:'var(--red)'}}/><div><div className="we-alert-text"><strong>Overseas Not Contactable:</strong> {displayName(n.user)}</div><div className="we-alert-sub">{n.leave.country} · Emergency: {n.leave.emergency_contact||'—'}</div></div></div>
         ))}
