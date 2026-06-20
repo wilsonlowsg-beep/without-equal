@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod, GroupReview } from '@/types/database'
-import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel, LEAVE_STATUSES, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown, isPastCutoff, GROUPS } from '@/lib/constants'
+import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel, LEAVE_STATUSES, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown, isPastCutoff, GROUPS, dayOfWeek } from '@/lib/constants'
 
 interface PersonnelRow {
   user: User
@@ -17,7 +17,10 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
   const [loading, setLoading] = useState(true)
   const [snapshot,  setSnapshot]  = useState<{id:string;captured_at:string;report_text:string}|null>(null)
   const [snapView,  setSnapView]  = useState<'live'|'snapshot'>('live')
-  const [schedEdit, setSchedEdit] = useState<User|null>(null)
+  const [schedEdit,   setSchedEdit]   = useState<User|null>(null)
+  const [histFrom,    setHistFrom]    = useState('')
+  const [histTo,      setHistTo]      = useState('')
+  const [downloading, setDownloading] = useState(false)
   const reportRef = useRef('')
   const supabase = createClient()
   const today    = todayStr()
@@ -111,6 +114,48 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
     ))
     showToast(`${lastName(targetUser)} → ${schedule === 'shift' ? 'Shift / 24-7' : 'Mon–Fri'} ✓`)
     setSchedEdit(null)
+  }
+
+  const downloadHistory = async () => {
+    if (!histFrom || !histTo) return
+    setDownloading(true)
+    const memberIds = rows.map(r => r.user.id)
+    const { data: subs } = await supabase
+      .from('daily_submissions')
+      .select('*, user:users(full_name, rank, title, personnel_type, appointment)')
+      .in('user_id', memberIds)
+      .gte('submission_date', histFrom)
+      .lte('submission_date', histTo)
+      .order('submission_date')
+      .order('submitted_at')
+
+    const header = ['Date','Day','Name','Appointment','Status','Time_Submitted','Auto','Remarks']
+    const csvRows = (subs ?? []).map(s => {
+      const u = s.user as any
+      const name = u.personnel_type === 'Military' ? `${u.rank} ${u.full_name}` : `${u.title} ${u.full_name}`
+      const time = new Date(s.submitted_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})
+      return [
+        s.submission_date,
+        dayOfWeek(s.submission_date),
+        name,
+        u.appointment ?? '',
+        s.status,
+        time + 'H',
+        s.is_auto ? 'Yes' : 'No',
+        s.remarks ?? '',
+      ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')
+    })
+
+    const csv = [header.join(','), ...csvRows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `${grpName}_History_${histFrom}_to_${histTo}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    setDownloading(false)
+    showToast('CSV downloaded ✓')
   }
 
   if (loading) return <div style={{padding:24,color:'var(--dim)',fontSize:13}}>Loading…</div>
@@ -235,7 +280,7 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
       {snapView === 'live' && <div>
         {/* STRENGTH SUMMARY */}
         <div className="we-card">
-          <div className="we-clabel">Group Readiness · {today}</div>
+          <div className="we-clabel">Group Readiness · {dayOfWeek(today)}, {today.slice(8)}-{today.slice(5,7)}-{today.slice(2,4)}</div>
           <div className="g3" style={{marginBottom:10}}>
             <div className="we-stat"><div className="we-statval sv-white">{strength}</div><div className="we-statlbl">Total</div></div>
             <div className="we-stat"><div className={`we-statval ${pending>0?'sv-amber':'sv-green'}`}>{reported}</div><div className="we-statlbl">Reported</div></div>
@@ -444,6 +489,24 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
           )}
         </div>
       </div>}
+
+      {/* HISTORICAL DOWNLOAD */}
+      <div className="we-card" style={{marginTop:4}}>
+        <div className="we-clabel">📥 Download Historical Records</div>
+        <div style={{display:'flex',gap:8,marginBottom:10}}>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,color:'var(--dim)',display:'block',marginBottom:4}}>From</label>
+            <input className="we-input" type="date" value={histFrom} onChange={e=>setHistFrom(e.target.value)} style={{fontSize:12}}/>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,color:'var(--dim)',display:'block',marginBottom:4}}>To</label>
+            <input className="we-input" type="date" value={histTo} onChange={e=>setHistTo(e.target.value)} style={{fontSize:12}}/>
+          </div>
+        </div>
+        <button className="btn btn-secondary" style={{width:'100%'}} disabled={!histFrom||!histTo||downloading} onClick={downloadHistory}>
+          {downloading ? 'Preparing…' : '⬇ Download CSV'}
+        </button>
+      </div>
 
       {/* WORK SCHEDULE EDIT MODAL */}
       {schedEdit && (
