@@ -48,7 +48,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
 
     // All users and today's subs for filter panel
     const [{ data: users }, { data: subs }] = await Promise.all([
-      supabase.from('users').select('*').eq('is_active',true).neq('role','admin').order('full_name'),
+      supabase.from('users').select('*').eq('is_active',true).order('full_name'),
       supabase.from('daily_submissions').select('*, covering_person:covering_person_id(id, full_name, rank, title, personnel_type)').eq('submission_date',today),
     ])
 
@@ -217,7 +217,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
         // Fetch all active users for "not reported" rows
         const { data: activeUsers } = await supabase
           .from('users').select('id, full_name, rank, title, personnel_type, group_id, appointment')
-          .eq('is_active', true).neq('role', 'admin').order('full_name')
+          .eq('is_active', true).order('full_name')
         const users = activeUsers ?? []
 
         const header = ['Date','Day','Name','Personnel_Type','Rank_Title','Group','Appointment','Status','Time_Submitted','Auto','Amended','Remarks']
@@ -254,7 +254,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
 
       } else {
         // Summary: aggregate counts per date
-        const { data: activeUsers } = await supabase.from('users').select('id').eq('is_active',true).neq('role','admin')
+        const { data: activeUsers } = await supabase.from('users').select('id').eq('is_active',true)
         const totalStrength = activeUsers?.length ?? 0
 
         const header = ['Date','Day','Strength','Reported','Pending','Rate_%','Available','Attend_B','Attend_C','Local_Leave','Overseas_Leave','Time_Off','Duty_Course']

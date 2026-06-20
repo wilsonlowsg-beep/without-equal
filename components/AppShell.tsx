@@ -17,8 +17,8 @@ type Tab = 'status' | 'history' | 'leave' | 'group' | 'formation' | 'trends' | '
 const ROLE_TABS: Record<string, {key:Tab;label:string}[]> = {
   personnel: [{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
   grouphead: [{key:'group',label:'My Group'},{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
-  ac3:       [{key:'formation',label:'Formation'},{key:'trends',label:'Trends'}],
-  admin:     [{key:'admin',label:'Admin'},{key:'formation',label:'Dashboard'}],
+  ac3:       [{key:'formation',label:'Formation'},{key:'trends',label:'Trends'},{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
+  admin:     [{key:'admin',label:'Admin'},{key:'formation',label:'Dashboard'},{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
 }
 
 function Clock() {
