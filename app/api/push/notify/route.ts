@@ -1,20 +1,20 @@
 /**
- * POST /api/push/notify
+ * GET /api/push/notify
  *
  * Called by Vercel cron at 0800 SGT (0000 UTC).
+ * Vercel cron always sends GET requests — auth via x-vercel-cron header.
  * Sends a push notification to every subscribed user who has NOT yet
  * submitted their daily status for today.
  *
- * Required env vars (set in Vercel dashboard > Settings > Environment Variables):
+ * Required env vars (Vercel dashboard > Settings > Environment Variables):
  *   NEXT_PUBLIC_VAPID_PUBLIC_KEY
  *   VAPID_PRIVATE_KEY
  *   VAPID_EMAIL
  *   SUPABASE_SERVICE_ROLE_KEY
- *   CRON_SECRET
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import webpush from 'web-push'
+import * as webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseAdmin = () =>
@@ -23,20 +23,13 @@ const supabaseAdmin = () =>
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 
-export async function POST(req: NextRequest) {
-  // Verify cron secret
-  const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Initialise VAPID inside handler — avoids build-time errors when env vars absent
+async function sendNotifications() {
   const vapidPublic  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
   const vapidPrivate = process.env.VAPID_PRIVATE_KEY
   const vapidEmail   = process.env.VAPID_EMAIL
 
   if (!vapidPublic || !vapidPrivate || !vapidEmail) {
-    return NextResponse.json({ error: 'VAPID env vars not configured' }, { status: 500 })
+    throw new Error('VAPID env vars not configured')
   }
 
   webpush.setVapidDetails(`mailto:${vapidEmail}`, vapidPublic, vapidPrivate)
@@ -48,9 +41,8 @@ export async function POST(req: NextRequest) {
     .from('push_subscriptions')
     .select('user_id, endpoint, p256dh, auth')
 
-  if (error || !subs) {
-    return NextResponse.json({ error: error?.message ?? 'No subscriptions' }, { status: 500 })
-  }
+  if (error) throw new Error(error.message)
+  if (!subs || subs.length === 0) return { sent: 0, failed: 0, skipped: 0 }
 
   const { data: submitted } = await db
     .from('daily_submissions')
@@ -75,10 +67,27 @@ export async function POST(req: NextRequest) {
     )
   )
 
-  const sent   = results.filter((r) => r.status === 'fulfilled').length
-  const failed = results.filter((r) => r.status === 'rejected').length
+  return {
+    sent:    results.filter((r) => r.status === 'fulfilled').length,
+    failed:  results.filter((r) => r.status === 'rejected').length,
+    skipped: submittedIds.size,
+  }
+}
 
-  console.log(`[push/notify] ${today}: sent=${sent}, failed=${failed}, skipped=${submittedIds.size}`)
+// Vercel cron sends GET
+export async function GET(req: NextRequest) {
+  // Vercel automatically sets this header for cron invocations
+  const isCron = req.headers.get('x-vercel-cron') === '1'
+  if (!isCron) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
-  return NextResponse.json({ ok: true, sent, failed, skipped: submittedIds.size })
+  try {
+    const result = await sendNotifications()
+    console.log('[push/notify]', result)
+    return NextResponse.json({ ok: true, ...result })
+  } catch (err) {
+    console.error('[push/notify] Error:', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }
