@@ -18,7 +18,9 @@ function b64urlDecode(str: string): Buffer {
 /** Wrap a raw 32-byte EC private key scalar into PKCS8 DER for P-256 */
 function wrapRawEcPrivateKey(raw: Buffer): ArrayBuffer {
   const ecHeader = Buffer.from('3041020100301306072a8648ce3d020106082a8648ce3d030107042730250201010420', 'hex')
-  return Buffer.concat([ecHeader, raw]).buffer
+  const combined = Buffer.concat([ecHeader, raw])
+  // Buffer.concat may return a view into a shared pool — slice to get an exact, clean ArrayBuffer
+  return combined.buffer.slice(combined.byteOffset, combined.byteOffset + combined.byteLength) as ArrayBuffer
 }
 
 export async function makeVapidJwt(audience: string, subject: string, privateKeyB64: string): Promise<string> {
@@ -83,7 +85,8 @@ export async function encryptPayload(p256dhB64: string, authB64: string, plainte
   const salt   = crypto.randomBytes(16)
   const rs     = Buffer.alloc(4); rs.writeUInt32BE(4096, 0)
   const keylen = Buffer.from([ephPubRaw.length])
-  return Buffer.concat([salt, rs, keylen, ephPubRaw, ct]).buffer
+  const final  = Buffer.concat([salt, rs, keylen, ephPubRaw, ct])
+  return final.buffer.slice(final.byteOffset, final.byteOffset + final.byteLength) as ArrayBuffer
 }
 
 export async function sendPush(
