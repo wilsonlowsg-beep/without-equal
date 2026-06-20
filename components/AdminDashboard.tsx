@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User } from '@/types/database'
 import { displayName, GROUPS, MIL_RANKS, CIV_TITLES, statusColor } from '@/lib/constants'
+import PushSender from './PushSender'
 
 // removed - using real email now
 function mobileToEmail(mobile: string): string {
@@ -241,9 +242,6 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
   const [pushMessage,  setPushMessage]  = useState('⏰ 0800H — Report your status for today.')
   const [pushLastSent, setPushLastSent] = useState('')
   const [savingSettings, setSavingSettings] = useState(false)
-  const [sendNowMsg,   setSendNowMsg]   = useState('')
-  const [sendNowTitle, setSendNowTitle] = useState('')
-  const [sending,      setSending]      = useState(false)
   const supabase = createClient()
 
   useEffect(()=>{
@@ -279,28 +277,6 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
     showToast('Notification settings saved ✓')
   }
 
-  const sendNow = async () => {
-    if (!sendNowMsg.trim() || !myUserId) return
-    setSending(true)
-    try {
-      const res = await fetch('/api/push/send-now', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: myUserId, message: sendNowMsg.trim(), title: sendNowTitle.trim()||undefined }),
-      })
-      const json = await res.json()
-      if (json.ok) {
-        showToast(`Push sent to ${json.sent} device${json.sent===1?'':'s'} ✓`)
-        setSendNowMsg(''); setSendNowTitle('')
-        setPushLastSent(new Date().toISOString())
-      } else {
-        showToast('Error: ' + (json.error ?? 'Unknown error'))
-      }
-    } catch(e) {
-      showToast('Network error — check console')
-    }
-    setSending(false)
-  }
 
   const saveRoleAndGroup = async (role:string, groupId:number, workSchedule:string) => {
     if (!editing) return
@@ -499,42 +475,17 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
           </div>
 
           {/* Send Now */}
-          <div className="we-card" style={{border:'1px solid rgba(8,145,178,0.3)',background:'rgba(8,145,178,0.04)'}}>
-            <div className="we-clabel" style={{color:'var(--teal,#0891B2)'}}>Send Immediate Push</div>
-            <div style={{fontSize:11,color:'var(--dim)',marginBottom:12,lineHeight:1.5}}>
-              Sends a push right now to all users who haven't submitted today. Use for parade changes, urgent announcements, or reminders.
-            </div>
-
-            <div className="fg" style={{marginBottom:8}}>
-              <label className="we-label">Title (optional)</label>
-              <input
-                className="we-input"
-                placeholder="WITHOUT EQUAL · Daily Readiness"
-                value={sendNowTitle}
-                onChange={e=>setSendNowTitle(e.target.value)}
-              />
-            </div>
-
-            <div className="fg" style={{marginBottom:12}}>
-              <label className="we-label">Message <span style={{color:'var(--red)'}}>*</span></label>
-              <textarea
-                className="we-input we-textarea"
-                rows={2}
-                placeholder="e.g. Parade at 0900 today — report by 0845"
-                value={sendNowMsg}
-                onChange={e=>setSendNowMsg(e.target.value)}
-              />
-            </div>
-
-            <button
-              className="btn btn-primary"
-              disabled={!sendNowMsg.trim() || sending || !myUserId}
-              onClick={sendNow}
-              style={{background:'var(--teal,#0891B2)'}}
-            >
-              {sending ? 'Sending…' : '📲 Send Now'}
-            </button>
-          </div>
+          {myUserId && (
+            <PushSender
+              userId={myUserId}
+              role="admin"
+              myGroupId={0}
+              showToast={showToast}
+              onSent={({ sent }) => {
+                if (sent > 0) setPushLastSent(new Date().toISOString())
+              }}
+            />
+          )}
         </div>
       )}
 

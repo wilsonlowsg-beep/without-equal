@@ -1,7 +1,13 @@
 /**
  * POST /api/push/send-now
- * Admin-only manual push with a custom message.
- * Body: { userId: string; message: string; title?: string }
+ * Manual push — available to admin (any group) and group heads (own group only).
+ *
+ * Body:
+ *   userId:      string   — caller's user ID (for role verification)
+ *   message:     string   — push body text (required)
+ *   title?:      string   — push title (defaults to "WITHOUT EQUAL · Daily Readiness")
+ *   targetGroup?: number  — group ID to target; omit or null = all groups
+ *   pendingOnly?: boolean — true = only users who haven't submitted today (default: false)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -13,7 +19,8 @@ const supabaseAdmin = () =>
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, message, title } = await req.json()
+    const { userId, message, title, targetGroup, pendingOnly = false } = await req.json()
+
     if (!userId || !message?.trim())
       return NextResponse.json({ error: 'userId and message required' }, { status: 400 })
 
@@ -25,42 +32,78 @@ export async function POST(req: NextRequest) {
 
     const db = supabaseAdmin()
 
-    // Verify caller is an admin
-    const { data: caller } = await db.from('users').select('role').eq('id', userId).single()
-    if (caller?.role !== 'admin')
-      return NextResponse.json({ error: 'Forbidden — admin only' }, { status: 403 })
+    // Verify caller role
+    const { data: caller } = await db
+      .from('users')
+      .select('role, group_id')
+      .eq('id', userId)
+      .single()
 
-    const today = new Date().toISOString().slice(0, 10)
+    if (!caller || !['admin', 'grouphead'].includes(caller.role))
+      return NextResponse.json({ error: 'Forbidden — admin or group head only' }, { status: 403 })
 
-    const { data: subs, error } = await db.from('push_subscriptions').select('user_id, endpoint, p256dh, auth')
-    if (error || !subs?.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no subscriptions' })
+    // Group heads can only target their own group
+    const effectiveGroup: number | null =
+      caller.role === 'grouphead'
+        ? caller.group_id                          // always own group
+        : (targetGroup != null ? targetGroup : null) // admin: null = all
 
-    // Only send to users who haven't reported today
-    const { data: submitted } = await db.from('daily_submissions').select('user_id').eq('submission_date', today)
-    const done    = new Set((submitted ?? []).map((r: { user_id: string }) => r.user_id))
-    const pending = subs.filter((r: { user_id: string }) => !done.has(r.user_id))
+    // Fetch push subscriptions, filtered by group if needed
+    let subsQuery = db
+      .from('push_subscriptions')
+      .select('user_id, endpoint, p256dh, auth, users!inner(group_id, is_active)')
+      .eq('users.is_active', true)
+
+    if (effectiveGroup != null) {
+      subsQuery = subsQuery.eq('users.group_id', effectiveGroup)
+    }
+
+    const { data: subs, error } = await subsQuery
+    if (error) {
+      console.error('[push/send-now] subs query error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    if (!subs?.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no subscriptions' })
+
+    // If pendingOnly, exclude users who already submitted today
+    let targetSubs = subs
+    if (pendingOnly) {
+      const today = new Date().toISOString().slice(0, 10)
+      const { data: submitted } = await db
+        .from('daily_submissions')
+        .select('user_id')
+        .eq('submission_date', today)
+      const done = new Set((submitted ?? []).map((r: { user_id: string }) => r.user_id))
+      targetSubs = subs.filter((s: any) => !done.has(s.user_id))
+    }
+
+    if (!targetSubs.length) return NextResponse.json({ ok: true, sent: 0, reason: 'all users already submitted' })
 
     const payload = JSON.stringify({
       title: title?.trim() || 'WITHOUT EQUAL · Daily Readiness',
-      body: message.trim(),
-      url: '/',
+      body:  message.trim(),
+      url:   '/',
     })
 
     const results = await Promise.allSettled(
-      pending.map((sub: { endpoint: string; p256dh: string; auth: string }) =>
-        sendPush(sub, payload, vapidPublic, vapidPrivate, vapidEmail)
+      targetSubs.map((sub: any) =>
+        sendPush(
+          { endpoint: sub.endpoint, p256dh: sub.p256dh, auth: sub.auth },
+          payload, vapidPublic, vapidPrivate, vapidEmail
+        )
       )
     )
 
     const sent   = results.filter(r => r.status === 'fulfilled').length
     const failed = results.filter(r => r.status === 'rejected').length
-    console.log(`[push/send-now] sent=${sent} failed=${failed} skipped=${done.size} msg="${message}"`)
+    const groupLabel = effectiveGroup != null ? `group ${effectiveGroup}` : 'all groups'
+    console.log(`[push/send-now] ${groupLabel} sent=${sent} failed=${failed} msg="${message}"`)
 
     // Update last sent timestamp
     await db.from('system_settings')
       .upsert({ key: 'push_last_sent', value: new Date().toISOString(), updated_at: new Date().toISOString() })
 
-    return NextResponse.json({ ok: true, sent, failed, skipped: done.size })
+    return NextResponse.json({ ok: true, sent, failed })
   } catch (err) {
     console.error('[push/send-now] Error:', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
