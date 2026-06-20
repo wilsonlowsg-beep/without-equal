@@ -30,9 +30,10 @@ function RoleBadge({ role }: { role: string }) {
   )
 }
 
-function RoleModal({ user, onSave, onClose }: { user: User; onSave:(role:string,groupId:number)=>void; onClose:()=>void }) {
-  const [role,    setRole]    = useState(user.role)
-  const [groupId, setGroupId] = useState(user.group_id)
+function RoleModal({ user, onSave, onClose }: { user: User; onSave:(role:string,groupId:number,workSchedule:string)=>void; onClose:()=>void }) {
+  const [role,         setRole]        = useState(user.role)
+  const [groupId,      setGroupId]     = useState(user.group_id)
+  const [workSchedule, setWorkSchedule] = useState((user as any).work_schedule ?? 'weekdays')
   return (
     <div style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={onClose}>
       <div style={{background:'var(--surf)',border:'1px solid var(--border)',borderRadius:'14px 14px 0 0',padding:'20px 18px 40px',width:'100%',maxWidth:430}} onClick={e=>e.stopPropagation()}>
@@ -44,6 +45,25 @@ function RoleModal({ user, onSave, onClose }: { user: User; onSave:(role:string,
         <select className="we-input we-select" style={{marginBottom:16}} value={groupId} onChange={e=>setGroupId(Number(e.target.value))}>
           {GROUPS.map(g=><option key={g.id} value={g.id}>Grp {g.id} – {g.name}</option>)}
         </select>
+
+        <label className="we-label" style={{marginBottom:10,display:'block'}}>Work Schedule</label>
+        <div className="g2" style={{gap:8,marginBottom:16}}>
+          {[
+            { v:'weekdays', label:'📅 Mon–Fri', desc:'No weekend reporting' },
+            { v:'shift',    label:'🔄 Shift / 24-7', desc:'Reports daily incl. weekends' },
+          ].map(opt=>(
+            <button key={opt.v} onClick={()=>setWorkSchedule(opt.v)} style={{
+              padding:'10px 12px', borderRadius:8, cursor:'pointer', textAlign:'left',
+              border:`1.5px solid ${workSchedule===opt.v?'var(--amber)':'var(--border)'}`,
+              background: workSchedule===opt.v?'rgba(232,160,32,0.1)':'var(--surf-hi)',
+              color: workSchedule===opt.v?'var(--text)':'var(--dim)',
+              fontFamily:'var(--sans)',
+            }}>
+              <div style={{fontSize:12,fontWeight:600}}>{opt.label}</div>
+              <div style={{fontSize:10,marginTop:2,opacity:0.7}}>{opt.desc}</div>
+            </button>
+          ))}
+        </div>
 
         <label className="we-label" style={{marginBottom:10,display:'block'}}>Access Level</label>
         <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:20}}>
@@ -66,7 +86,7 @@ function RoleModal({ user, onSave, onClose }: { user: User; onSave:(role:string,
         </div>
         <div style={{display:'flex',gap:8}}>
           <button className="btn btn-secondary" style={{flex:1}} onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" style={{flex:2}} onClick={()=>onSave(role,groupId)}>Save Changes</button>
+          <button className="btn btn-primary" style={{flex:2}} onClick={()=>onSave(role,groupId,workSchedule)}>Save Changes</button>
         </div>
       </div>
     </div>
@@ -77,6 +97,7 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
   const [form, setForm] = useState({
     type:'Military', rank:'MAJ', title:'Mr',
     name:'', groupId:1, appt:'', mobile:'', email:'', password:'',
+    work_schedule: 'weekdays',
   })
   const [err, setErr]       = useState('')
   const [saving, setSaving] = useState(false)
@@ -116,6 +137,7 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
       mobile:         form.mobile.trim(),
       email:          authEmail,
       role:           'personnel',
+      work_schedule:  form.work_schedule,
     })
 
     if (profileErr) { setErr('Profile error: ' + profileErr.message); setSaving(false); return }
@@ -172,6 +194,27 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
         <div style={{fontSize:10,color:'var(--dim)',marginTop:4}}>Tell them this password. They can use Forgot Password to change it.</div>
       </div>
 
+      <div className="fg">
+        <label className="we-label">Work Schedule</label>
+        <div className="g2" style={{gap:8}}>
+          {[
+            { v:'weekdays', label:'📅 Mon–Fri', desc:'No weekend reporting' },
+            { v:'shift',    label:'🔄 Shift / 24-7', desc:'Reports daily incl. weekends' },
+          ].map(opt => (
+            <button key={opt.v} onClick={() => upd('work_schedule', opt.v)} style={{
+              padding:'10px 12px', borderRadius:8, cursor:'pointer', textAlign:'left',
+              border:`1.5px solid ${form.work_schedule===opt.v?'var(--amber)':'var(--border)'}`,
+              background: form.work_schedule===opt.v?'rgba(232,160,32,0.1)':'var(--surf-hi)',
+              color: form.work_schedule===opt.v?'var(--text)':'var(--dim)',
+              fontFamily:'var(--sans)',
+            }}>
+              <div style={{fontSize:12,fontWeight:600}}>{opt.label}</div>
+              <div style={{fontSize:10,marginTop:2,opacity:0.7}}>{opt.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {err && <div className="we-err-text" style={{marginBottom:10}}>{err}</div>}
 
       <div style={{display:'flex',gap:8}}>
@@ -207,14 +250,14 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
     setLoading(false)
   }
 
-  const saveRoleAndGroup = async (role:string, groupId:number) => {
+  const saveRoleAndGroup = async (role:string, groupId:number, workSchedule:string) => {
     if (!editing) return
-    const { error } = await supabase.from('users').update({ role, group_id:groupId }).eq('id', editing.id)
+    const { error } = await supabase.from('users').update({ role, group_id:groupId, work_schedule:workSchedule }).eq('id', editing.id)
     if (error) { showToast('Error: '+error.message); return }
     await supabase.from('audit_log').insert({
       user_id: editing.id, action:'ROLE_CHANGE',
-      old_value:{ role:editing.role, group_id:editing.group_id },
-      new_value:{ role, group_id:groupId },
+      old_value:{ role:editing.role, group_id:editing.group_id, work_schedule:(editing as any).work_schedule },
+      new_value:{ role, group_id:groupId, work_schedule:workSchedule },
     })
     showToast(`${editing.full_name.split(' ').pop()} → ${role} ✓`)
     setEditing(null)
@@ -299,7 +342,9 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
                   </div>
                   <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:3}}>
                     <RoleBadge role={u.role}/>
-                    <span style={{fontSize:9,color:'var(--faint)'}}>Tap to change</span>
+                    <span style={{fontSize:9,color:(u as any).work_schedule==='shift'?'var(--teal,#0891B2)':'var(--faint)'}}>
+                      {(u as any).work_schedule==='shift'?'🔄 Shift':'📅 Mon–Fri'}
+                    </span>
                   </div>
                 </div>
               ))}

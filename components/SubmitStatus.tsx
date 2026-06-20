@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod } from '@/types/database'
-import { STATUS_CATS, statusColor, todayStr, tomorrowStr, isPastCutoff, LEAVE_STATUSES, formatDate, PRE_REPORT_HOUR, MEDICAL_STATUSES } from '@/lib/constants'
+import { STATUS_CATS, statusColor, todayStr, tomorrowStr, isPastCutoff, LEAVE_STATUSES, formatDate, PRE_REPORT_HOUR, MEDICAL_STATUSES, WEEKEND_STATUS, isWeekend } from '@/lib/constants'
 
 export default function SubmitStatus({ user, showToast }: { user: User; showToast: (m:string)=>void }) {
   const [todaySub,    setTodaySub]  = useState<DailySubmission|null>(null)
@@ -15,7 +15,8 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
   const [amendReason, setAmendR]    = useState('')
   const [loading,     setLoading]   = useState(true)
   const [saving,      setSaving]    = useState(false)
-  const [preReport,    setPreReport] = useState(false) // true = submitting for tomorrow
+  const [preReport,    setPreReport]  = useState(false) // true = submitting for tomorrow
+  const [weekendOverride, setWkdOvr] = useState(false) // weekday staff opting to report on weekend
   const [medEndDate,   setMedEnd]   = useState('')    // MC/medical expiry date
   const [coverPerson,  setCoverP]   = useState('')    // covering person ID for leave
   const [personnel,    setPersonnel] = useState<User[]>([])
@@ -66,6 +67,18 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
     setTodaySub(sub)
     setTomSub(tomSub)
     if (sub) { setSelected(sub.status); setRemarks(sub.remarks ?? ''); setMedEnd(sub.medical_end_date ?? ''); setCoverP(sub.covering_person_id ?? '') }
+
+    // Auto-mark weekday staff as Weekend on Sat/Sun
+    if (!sub && isWeekend() && user.work_schedule === 'weekdays') {
+      const { data: wkSub } = await supabase.from('daily_submissions').upsert({
+        user_id: user.id, submission_date: todayStr(),
+        status: WEEKEND_STATUS, submitted_at: new Date().toISOString(),
+        is_auto: true, auto_reason: 'Auto: weekday schedule — weekend',
+        is_amended: false,
+      }, { onConflict: 'user_id,submission_date' }).select().single()
+      if (wkSub) setTodaySub(wkSub)
+    }
+
     setLoading(false)
   }
 
@@ -132,6 +145,44 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
   }
 
   if (loading) return <div style={{padding:24,color:'var(--dim)',fontSize:13}}>Loading…</div>
+
+  // ── WEEKEND — WEEKDAY STAFF ──────────────────────────────
+  if (isWeekend() && user.work_schedule === 'weekdays' && !weekendOverride) {
+    const dayName = new Date().getDay() === 6 ? 'Saturday' : 'Sunday'
+    const isAlreadyOverridden = todaySub && todaySub.status !== WEEKEND_STATUS
+    return (
+      <div>
+        <div className="we-card green" style={{textAlign:'center',padding:'24px 20px'}}>
+          <div style={{fontSize:28,marginBottom:12}}>🏖️</div>
+          <div style={{fontSize:16,fontWeight:700,color:'var(--green)',marginBottom:6}}>{dayName} — Stand Down</div>
+          <div style={{fontSize:13,color:'var(--dim)',lineHeight:1.6}}>
+            No reporting required today.<br/>Your status has been auto-marked.
+          </div>
+        </div>
+        {isAlreadyOverridden ? (
+          <div className="we-card green">
+            <div className="we-clabel cl-green">Status Submitted</div>
+            <div className="we-row">
+              <div className="we-dot" style={{background:'var(--green)'}}/>
+              <div style={{flex:1,fontSize:13,fontWeight:500,color:statusColor(todaySub!.status)}}>{todaySub!.status}</div>
+              <div style={{fontSize:11,color:'var(--dim)',fontFamily:'var(--mono)'}}>
+                {new Date(todaySub!.submitted_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{textAlign:'center',paddingTop:4}}>
+            <button
+              onClick={() => setWkdOvr(true)}
+              style={{fontSize:12,color:'var(--dim)',background:'none',border:'1px solid var(--border)',borderRadius:8,padding:'8px 20px',cursor:'pointer',fontFamily:'var(--sans)'}}
+            >
+              I'm working today — submit my status
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // ── AUTO-LEAVE STATE ─────────────────────────────────────
   if (autoLeave && (!todaySub || todaySub.is_auto)) {

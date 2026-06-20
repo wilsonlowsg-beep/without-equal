@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { GroupStats, User, LeavePeriod } from '@/types/database'
-import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel } from '@/lib/constants'
+import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel, WEEKEND_STATUS, isWeekend } from '@/lib/constants'
 
 export default function FormationDashboard({ showToast }: { showToast: (m:string)=>void }) {
   const [stats,    setStats]    = useState<GroupStats[]>([])
@@ -78,6 +78,9 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
   const nightShift   = allSubs.filter(s=>s.status==='Night Shift').length
   const restDay      = allSubs.filter(s=>s.status==='Rest Day').length
   const totalShift   = dayShift + nightShift + restDay
+  // Weekend stand-down count
+  const weekendCount = allSubs.filter(s=>s.status===WEEKEND_STATUS).length
+  const isWknd       = isWeekend()
 
   // Filter
   let filtered = allUsers
@@ -98,6 +101,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
     `Available       : ${avail}`,`Attend B        : ${attB}`,`Attend C        : ${attC}`,
     `Local Leave     : ${localLv}`,`Overseas Leave  : ${overseasLv}`,`Time Off        : ${timeOff}`,`Duty / Course   : ${duty}`,
     ...(totalShift>0?[`Day Shift       : ${dayShift}`,`Night Shift     : ${nightShift}`,`Rest Day        : ${restDay}`]:[]),
+    ...(weekendCount>0?[`Weekend Stand-dn: ${weekendCount}`]:[]),
     '─────────────────────────',
     ...(overseas.length>0?['Overseas Personnel:',...overseas.map(o=>{
       const cover = (o.leave as any).covering_person ? ` / Covered by: ${displayName((o.leave as any).covering_person)}` : ''
@@ -280,6 +284,12 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
           <div className="we-stat"><div className={`we-statval ${overseasLv>0?'sv-purple':'sv-dim'}`} style={{fontSize:18}}>{overseasLv}</div><div className="we-statlbl">Overseas</div></div>
           <div className="we-stat"><div className={`we-statval ${timeOff>0?'sv-amber':'sv-dim'}`} style={{fontSize:18}}>{timeOff}</div><div className="we-statlbl">Time Off</div></div>
         </div>
+        {weekendCount > 0 && (
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)',display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:10,color:'var(--dim)',fontFamily:'var(--mono)'}}>🏖️ WEEKEND STAND-DOWN</span>
+            <span style={{fontSize:15,fontWeight:700,color:'var(--dim)'}}>{weekendCount}</span>
+          </div>
+        )}
         {totalShift > 0 && (
           <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)'}}>
             <div style={{fontSize:10,color:'var(--teal,#0891B2)',fontFamily:'var(--mono)',letterSpacing:'0.08em',marginBottom:6}}>SHIFT WORKERS · {totalShift}</div>

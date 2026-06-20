@@ -315,6 +315,10 @@ ALTER TABLE leave_periods
 ALTER TABLE daily_submissions
   ADD COLUMN IF NOT EXISTS covering_person_id UUID REFERENCES users(id) ON DELETE SET NULL;
 
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS work_schedule TEXT NOT NULL DEFAULT 'weekdays'
+  CHECK (work_schedule IN ('weekdays','shift'));
+
 -- ============================================================
 -- AUTO-MARK LEAVE FUNCTION
 -- Call daily at 0000H via Supabase cron or Vercel cron

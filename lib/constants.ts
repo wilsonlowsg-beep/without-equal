@@ -136,7 +136,13 @@ export function isDateInRange(date: string, start: string, end: string): boolean
   return date >= start && date <= end
 }
 
-export const MEDICAL_STATUSES = ['Attend B', 'Attend C']
+export const MEDICAL_STATUSES  = ['Attend B', 'Attend C']
+export const WEEKEND_STATUS    = 'Weekend'
+
+export function isWeekend(date = new Date()): boolean {
+  const day = date.getDay()
+  return day === 0 || day === 6
+}
 
 /** Returns days remaining until medical_end_date (0 = today, negative = expired) */
 export function medicalDaysRemaining(endDate: string): number {

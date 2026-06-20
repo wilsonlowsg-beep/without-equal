@@ -19,6 +19,7 @@ export interface User {
   appointment: string
   mobile: string
   role: Role
+  work_schedule: 'weekdays' | 'shift'
   is_active: boolean
   created_at: string
   // joined

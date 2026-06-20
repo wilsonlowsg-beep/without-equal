@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod, GroupReview } from '@/types/database'
-import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel, LEAVE_STATUSES } from '@/lib/constants'
+import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel, LEAVE_STATUSES, WEEKEND_STATUS, isWeekend } from '@/lib/constants'
 
 interface PersonnelRow {
   user: User
@@ -64,9 +64,13 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
 
   if (loading) return <div style={{padding:24,color:'var(--dim)',fontSize:13}}>Loading…</div>
 
-  const strength      = rows.length
-  const reported      = rows.filter(r => r.sub !== null).length
+  const weekend       = isWeekend()
+  // On weekends, weekday-schedule staff are excluded from strength/pending (they're auto-marked Weekend)
+  const activeRows    = weekend ? rows.filter(r => (r.user as any).work_schedule === 'shift' || (r.sub && r.sub.status !== WEEKEND_STATUS)) : rows
+  const strength      = weekend ? rows.filter(r => (r.user as any).work_schedule === 'shift').length : rows.length
+  const reported      = weekend ? activeRows.filter(r => r.sub && r.sub.status !== WEEKEND_STATUS).length : rows.filter(r => r.sub !== null).length
   const pending       = strength - reported
+  const weekendCount  = rows.filter(r => r.sub?.status === WEEKEND_STATUS).length
   const available     = rows.filter(r => r.sub && AVAILABLE_STATUSES.includes(r.sub.status)).length
   const attendB       = rows.filter(r => r.sub?.status === 'Attend B').length
   const attendC       = rows.filter(r => r.sub?.status === 'Attend C').length
@@ -114,6 +118,12 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
           <div className="we-stat"><div className={`we-statval ${overseasLeave>0?'sv-purple':'sv-dim'}`} style={{fontSize:18}}>{overseasLeave}</div><div className="we-statlbl">Overseas</div></div>
           <div className="we-stat"><div className={`we-statval ${timeOff>0?'sv-amber':'sv-dim'}`} style={{fontSize:18}}>{timeOff}</div><div className="we-statlbl">Time Off</div></div>
         </div>
+        {weekendCount > 0 && (
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)',display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:10,color:'var(--dim)',fontFamily:'var(--mono)'}}>🏖️ WEEKEND STAND-DOWN</span>
+            <span style={{fontSize:13,fontWeight:700,color:'var(--dim)'}}>{weekendCount}</span>
+          </div>
+        )}
       </div>
 
       {/* PERSONNEL TABLE */}
