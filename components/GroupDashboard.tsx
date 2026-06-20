@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod, GroupReview } from '@/types/database'
 import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel, LEAVE_STATUSES, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown, isPastCutoff, GROUPS } from '@/lib/constants'
-import PushSender from './PushSender'
 
 interface PersonnelRow {
   user: User
@@ -445,16 +444,6 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
           )}
         </div>
       </div>}
-
-      {/* PUSH NOTIFICATION SENDER */}
-      <div style={{marginTop:12}}>
-        <PushSender
-          userId={user.id}
-          role="grouphead"
-          myGroupId={user.group_id}
-          showToast={showToast}
-        />
-      </div>
 
       {/* WORK SCHEDULE EDIT MODAL */}
       {schedEdit && (

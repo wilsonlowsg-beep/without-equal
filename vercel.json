@@ -4,12 +4,6 @@
   "devCommand": "next dev",
   "installCommand": "npm install --omit=dev --legacy-peer-deps",
   "regions": ["sin1"],
-  "crons": [
-    {
-      "path": "/api/push/notify",
-      "schedule": "0 0 * * *"
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",

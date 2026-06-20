@@ -11,7 +11,6 @@ import FormationDashboard from './FormationDashboard'
 import TrendsView from './TrendsView'
 import AdminDashboard from './AdminDashboard'
 import LeaveManager from './LeaveManager'
-import PushSetup from './PushSetup'
 
 type Tab = 'status' | 'history' | 'leave' | 'group' | 'formation' | 'trends' | 'admin'
 
@@ -297,8 +296,6 @@ export default function AppShell({ user, onLogout }: { user: User; onLogout: ()=
 
   return (
     <div className="we-root">
-      {/* PWA push notification setup — invisible, runs once on login */}
-      <PushSetup userId={user.id} />
       {/* TOPBAR */}
       <div className="we-topbar">
         <div className="we-brand">WITHOUT EQUAL</div>
