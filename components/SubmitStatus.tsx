@@ -3,20 +3,25 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod } from '@/types/database'
-import { STATUS_CATS, statusColor, todayStr, isPastCutoff, LEAVE_STATUSES, formatDate } from '@/lib/constants'
+import { STATUS_CATS, statusColor, todayStr, tomorrowStr, isPastCutoff, LEAVE_STATUSES, formatDate, PRE_REPORT_HOUR } from '@/lib/constants'
 
 export default function SubmitStatus({ user, showToast }: { user: User; showToast: (m:string)=>void }) {
-  const [todaySub,  setTodaySub]  = useState<DailySubmission|null>(null)
-  const [autoLeave, setAutoLeave] = useState<LeavePeriod|null>(null)
-  const [selected,  setSelected]  = useState<string|null>(null)
-  const [remarks,   setRemarks]   = useState('')
-  const [amendMode, setAmendMode] = useState(false)
-  const [amendReason, setAmendR]  = useState('')
-  const [loading,   setLoading]   = useState(true)
-  const [saving,    setSaving]    = useState(false)
+  const [todaySub,    setTodaySub]  = useState<DailySubmission|null>(null)
+  const [tomorrowSub, setTomSub]    = useState<DailySubmission|null>(null)
+  const [autoLeave,   setAutoLeave] = useState<LeavePeriod|null>(null)
+  const [selected,    setSelected]  = useState<string|null>(null)
+  const [remarks,     setRemarks]   = useState('')
+  const [amendMode,   setAmendMode] = useState(false)
+  const [amendReason, setAmendR]    = useState('')
+  const [loading,     setLoading]   = useState(true)
+  const [saving,      setSaving]    = useState(false)
+  const [preReport,   setPreReport] = useState(false) // true = submitting for tomorrow
   const supabase = createClient()
-  const today = todayStr()
-  const pastCutoff = isPastCutoff()
+  const today    = todayStr()
+  const tomorrow = tomorrowStr()
+  const pastCutoff   = isPastCutoff()
+  const canPreReport = new Date().getHours() >= PRE_REPORT_HOUR  // after 1800
+  const targetDate   = preReport ? tomorrow : today
 
   useEffect(() => { loadData() }, [])
 
@@ -28,6 +33,14 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
       .select('*')
       .eq('user_id', user.id)
       .eq('submission_date', today)
+      .single()
+
+    // Load tomorrow's submission (for pre-report display)
+    const { data: tomSub } = await supabase
+      .from('daily_submissions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('submission_date', tomorrow)
       .single()
 
     // Check if on approved leave today
@@ -42,6 +55,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
     const activeleave = leaves?.[0] ?? null
     setAutoLeave(activeleave)
     setTodaySub(sub)
+    setTomSub(tomSub)
     if (sub) { setSelected(sub.status); setRemarks(sub.remarks ?? '') }
     setLoading(false)
   }
@@ -53,7 +67,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
       .from('daily_submissions')
       .upsert({
         user_id: user.id,
-        submission_date: today,
+        submission_date: targetDate,
         status: selected!,
         remarks,
         submitted_at: now.toISOString(),
@@ -63,8 +77,11 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
       .select()
       .single()
 
-    if (!error) { setTodaySub(data); showToast('Status submitted ✓') }
-    else showToast('Error: ' + error.message)
+    if (!error) {
+      if (preReport) { setTomSub(data); showToast(`Pre-report for ${tomorrow} submitted ✓`) }
+      else           { setTodaySub(data); showToast('Status submitted ✓') }
+      setSelected(null); setRemarks('')
+    } else showToast('Error: ' + error.message)
     setSaving(false)
   }
 
@@ -209,13 +226,57 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
   // ── FRESH SUBMISSION ─────────────────────────────────────
   return (
     <div>
-      <div className="we-notif">
-        <div style={{fontSize:18,flexShrink:0}}>🔔</div>
-        <div>
-          <div style={{fontSize:13,fontWeight:600}}>Daily Status Required</div>
-          <div style={{fontSize:11,color:'var(--dim)',marginTop:2}}>Submit by 0830H · Takes under 10 seconds</div>
+      {/* Tomorrow pre-report status banner */}
+      {canPreReport && tomorrowSub && (
+        <div className="we-card" style={{background:'var(--teal-bg,#042830)',border:'1px solid rgba(8,145,178,0.2)',marginBottom:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{fontSize:16}}>🌙</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12,fontWeight:600,color:'var(--teal,#0891B2)'}}>Tomorrow pre-reported</div>
+              <div style={{fontSize:11,color:'var(--dim)',marginTop:2}}>{tomorrowSub.status} · {tomorrow}</div>
+            </div>
+            <button
+              onClick={()=>{ setPreReport(true); setSelected(tomorrowSub.status); setRemarks(tomorrowSub.remarks??'') }}
+              style={{fontSize:11,padding:'4px 10px',borderRadius:6,border:'1px solid rgba(8,145,178,0.3)',background:'rgba(8,145,178,0.1)',color:'var(--teal,#0891B2)',cursor:'pointer'}}
+            >Edit</button>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Today's banner OR pre-report toggle */}
+      {!preReport && (
+        <div className="we-notif">
+          <div style={{fontSize:18,flexShrink:0}}>{pastCutoff ? '⚠️' : '🔔'}</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:13,fontWeight:600}}>
+              {pastCutoff ? 'Submission window closed' : 'Daily Status Required'}
+            </div>
+            <div style={{fontSize:11,color:'var(--dim)',marginTop:2}}>
+              {pastCutoff ? 'Use "Request Amendment" below if needed' : 'Submit by 0830H · Takes under 10 seconds'}
+            </div>
+          </div>
+          {canPreReport && !tomorrowSub && (
+            <button
+              onClick={()=>{ setPreReport(true); setSelected(null); setRemarks('') }}
+              style={{fontSize:11,padding:'5px 10px',borderRadius:6,border:'1px solid rgba(8,145,178,0.4)',background:'rgba(8,145,178,0.1)',color:'var(--teal,#0891B2)',cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}
+            >🌙 Pre-report for Tomorrow</button>
+          )}
+        </div>
+      )}
+
+      {preReport && (
+        <div style={{background:'rgba(8,145,178,0.08)',border:'1px solid rgba(8,145,178,0.25)',borderRadius:10,padding:'10px 14px',marginBottom:12,display:'flex',alignItems:'center',gap:10}}>
+          <div style={{fontSize:16}}>🌙</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:12,fontWeight:700,color:'var(--teal,#0891B2)'}}>Pre-reporting for Tomorrow · {tomorrow}</div>
+            <div style={{fontSize:11,color:'var(--dim)',marginTop:2}}>Status will be saved for tomorrow's parade state.</div>
+          </div>
+          <button
+            onClick={()=>{ setPreReport(false); setSelected(null); setRemarks('') }}
+            style={{fontSize:11,padding:'4px 10px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--dim)',cursor:'pointer'}}
+          >Cancel</button>
+        </div>
+      )}
 
       {STATUS_CATS.map(cat => (
         <div key={cat.cat} style={{marginBottom:14}}>
@@ -235,13 +296,19 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
         </div>
       )}
 
+      {selected === 'Night Shift' && !preReport && (
+        <div style={{background:'rgba(8,145,178,0.08)',border:'1px solid rgba(8,145,178,0.2)',borderRadius:8,padding:'8px 12px',marginBottom:12,fontSize:12,color:'var(--teal,#0891B2)'}}>
+          💡 On Night Shift tomorrow? Use <strong>Pre-report for Tomorrow</strong> (above) before you start your shift.
+        </div>
+      )}
+
       <div className="fg" style={{marginTop:4}}>
         <label className="we-label">Remarks (optional)</label>
-        <textarea className="we-input we-textarea" placeholder="e.g. MINDEF meeting, Clinic review, KL liaison…" value={remarks} onChange={e=>setRemarks(e.target.value)} />
+        <textarea className="we-input we-textarea" placeholder="e.g. MINDEF meeting, Clinic review, Night shift 2000–0600…" value={remarks} onChange={e=>setRemarks(e.target.value)} />
       </div>
 
       <button className="btn btn-primary" disabled={!selected||saving} onClick={submit}>
-        {saving ? 'Submitting…' : selected ? `Submit · ${selected}` : 'Select your status above'}
+        {saving ? 'Submitting…' : selected ? `Submit · ${selected}${preReport ? ` (${tomorrow})` : ''}` : 'Select your status above'}
       </button>
     </div>
   )

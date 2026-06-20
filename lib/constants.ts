@@ -14,6 +14,8 @@ export const C = {
   blueBg:   '#081828',
   purple:   '#9B59B6',
   purpleBg: '#1A0828',
+  teal:     '#0891B2',
+  tealBg:   '#042830',
   text:     '#E8EEF4',
   dim:      '#7A9AB8',
   faint:    '#3A5470',
@@ -54,15 +56,24 @@ export const STATUS_CATS = [
     items: ['Duty', 'Course', 'Exercise', 'Official Travel'],
   },
   {
+    cat: 'Shift Work',
+    color: C.teal,
+    items: ['Day Shift', 'Night Shift', 'Rest Day'],
+  },
+  {
     cat: 'Others',
     color: C.dim,
     items: ['Attached Out', 'Other'],
   },
 ]
 
-export const LEAVE_STATUSES = ['Local Leave', 'Overseas Leave', 'Time Off']
-export const AVAILABLE_STATUSES = ['Present (Office)', 'Present (WFH)', 'External Meeting']
-export const DUTY_STATUSES = ['Duty', 'Course', 'Exercise', 'Official Travel']
+export const LEAVE_STATUSES    = ['Local Leave', 'Overseas Leave', 'Time Off']
+export const AVAILABLE_STATUSES = ['Present (Office)', 'Present (WFH)', 'External Meeting', 'Day Shift']
+export const DUTY_STATUSES      = ['Duty', 'Course', 'Exercise', 'Official Travel']
+export const SHIFT_STATUSES     = ['Day Shift', 'Night Shift', 'Rest Day']
+
+// Pre-reporting: after this hour (18 = 6pm), staff can submit for tomorrow
+export const PRE_REPORT_HOUR = 18
 
 export function statusColor(status: string): string {
   for (const cat of STATUS_CATS) {

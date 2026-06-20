@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { GroupStats, User, LeavePeriod } from '@/types/database'
-import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES } from '@/lib/constants'
+import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES } from '@/lib/constants'
 
 export default function FormationDashboard({ showToast }: { showToast: (m:string)=>void }) {
   const [stats,    setStats]    = useState<GroupStats[]>([])
@@ -73,6 +73,11 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
   const duty         = stats.reduce((a,b)=>a+(b.duty??0),0)
   const rate         = total ? Math.round(reported/total*100) : 0
   const unreviewed   = stats.filter(g=>!g.reviewed)
+  // Shift counts from allSubs (client-side, not in RPC)
+  const dayShift     = allSubs.filter(s=>s.status==='Day Shift').length
+  const nightShift   = allSubs.filter(s=>s.status==='Night Shift').length
+  const restDay      = allSubs.filter(s=>s.status==='Rest Day').length
+  const totalShift   = dayShift + nightShift + restDay
 
   // Filter
   let filtered = allUsers
@@ -92,6 +97,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
     '─────────────────────────',
     `Available       : ${avail}`,`Attend B        : ${attB}`,`Attend C        : ${attC}`,
     `Local Leave     : ${localLv}`,`Overseas Leave  : ${overseasLv}`,`Time Off        : ${timeOff}`,`Duty / Course   : ${duty}`,
+    ...(totalShift>0?[`Day Shift       : ${dayShift}`,`Night Shift     : ${nightShift}`,`Rest Day        : ${restDay}`]:[]),
     '─────────────────────────',
     ...(overseas.length>0?['Overseas Personnel:',...overseas.map(o=>`  · ${displayName(o.user)} [${o.leave.country}]${!o.leave.contactable?' ⚠ NOT CONTACTABLE':''}`)]:[]),
     ...(returning.length>0?['Returning Today:',...returning.map(r=>`  · ${displayName(r.user)}`)]:[]),
@@ -266,6 +272,16 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
           <div className="we-stat"><div className={`we-statval ${overseasLv>0?'sv-purple':'sv-dim'}`} style={{fontSize:18}}>{overseasLv}</div><div className="we-statlbl">Overseas</div></div>
           <div className="we-stat"><div className={`we-statval ${timeOff>0?'sv-amber':'sv-dim'}`} style={{fontSize:18}}>{timeOff}</div><div className="we-statlbl">Time Off</div></div>
         </div>
+        {totalShift > 0 && (
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)'}}>
+            <div style={{fontSize:10,color:'var(--teal,#0891B2)',fontFamily:'var(--mono)',letterSpacing:'0.08em',marginBottom:6}}>SHIFT WORKERS · {totalShift}</div>
+            <div className="g3">
+              <div className="we-stat"><div className={`we-statval ${dayShift>0?'sv-teal':'sv-dim'}`} style={{fontSize:18}}>{dayShift}</div><div className="we-statlbl">Day Shift</div></div>
+              <div className="we-stat"><div className={`we-statval ${nightShift>0?'sv-teal':'sv-dim'}`} style={{fontSize:18}}>{nightShift}</div><div className="we-statlbl">Night Shift</div></div>
+              <div className="we-stat"><div className={`we-statval ${restDay>0?'sv-teal':'sv-dim'}`} style={{fontSize:18}}>{restDay}</div><div className="we-statlbl">Rest Day</div></div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* GROUP TABLE */}

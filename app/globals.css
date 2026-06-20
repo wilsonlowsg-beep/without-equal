@@ -16,6 +16,8 @@
   --green-bg:  #082A1A;
   --blue:      #2D7DD2;
   --purple:    #9B59B6;
+  --teal:      #0891B2;
+  --teal-bg:   #042830;
   --text:      #E8EEF4;
   --dim:       #7A9AB8;
   --faint:     #3A5470;
@@ -81,6 +83,7 @@ html, body {
 .we-statval.sv-red    { color: var(--red); }
 .we-statval.sv-blue   { color: var(--blue); }
 .we-statval.sv-purple { color: var(--purple); }
+.we-statval.sv-teal   { color: var(--teal); }
 .we-statval.sv-dim    { color: var(--dim); }
 
 /* ── PROGRESS ── */
