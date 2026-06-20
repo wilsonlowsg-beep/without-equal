@@ -64,9 +64,17 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
 
     const activeleave = leaves?.[0] ?? null
     setAutoLeave(activeleave)
-    setTodaySub(sub)
+
+    // Stale auto-leave submission: leave was cancelled but submission still exists — clean it up
+    let cleanedSub = sub
+    if (sub && sub.is_auto && LEAVE_STATUSES.includes(sub.status) && !activeleave) {
+      await supabase.from('daily_submissions').delete().eq('id', sub.id)
+      cleanedSub = null
+    }
+
+    setTodaySub(cleanedSub)
     setTomSub(tomSub)
-    if (sub) { setSelected(sub.status); setRemarks(sub.remarks ?? ''); setMedEnd(sub.medical_end_date ?? ''); setCoverP(sub.covering_person_id ?? '') }
+    if (cleanedSub) { setSelected(cleanedSub.status); setRemarks(cleanedSub.remarks ?? ''); setMedEnd(cleanedSub.medical_end_date ?? ''); setCoverP(cleanedSub.covering_person_id ?? '') }
 
     // Auto-mark weekday staff as Weekend/Public Holiday on stand-down days
     if (!sub && isStandDown() && user.work_schedule === 'weekdays') {

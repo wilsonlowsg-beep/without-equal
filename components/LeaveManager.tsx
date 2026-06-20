@@ -82,7 +82,21 @@ export default function LeaveManager({ user, showToast }: { user: User; showToas
   }
 
   const cancelLeave = async (id: string) => {
+    const leave = leaves.find(l => l.id === id)
     await supabase.from('leave_periods').update({ status: 'cancelled' }).eq('id', id)
+
+    // Remove auto-submitted daily submissions for today onwards within the leave period
+    // so the user is prompted to re-submit their actual status
+    if (leave) {
+      const cleanFrom = today >= leave.start_date ? today : leave.start_date
+      await supabase.from('daily_submissions')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('is_auto', true)
+        .gte('submission_date', cleanFrom)
+        .lte('submission_date', leave.end_date)
+    }
+
     showToast('Leave cancelled')
     loadLeaves()
   }
