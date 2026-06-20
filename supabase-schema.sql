@@ -303,11 +303,14 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ============================================================
--- MIGRATION: Medical end date
+-- MIGRATION: Medical end date + Covering person
 -- Run once in Supabase SQL Editor if upgrading an existing deployment
 -- ============================================================
 ALTER TABLE daily_submissions
   ADD COLUMN IF NOT EXISTS medical_end_date DATE;
+
+ALTER TABLE leave_periods
+  ADD COLUMN IF NOT EXISTS covering_person_id UUID REFERENCES users(id) ON DELETE SET NULL;
 
 -- ============================================================
 -- AUTO-MARK LEAVE FUNCTION

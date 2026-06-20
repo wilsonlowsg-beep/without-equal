@@ -27,7 +27,7 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
     const [{ data: members }, { data: subs }, { data: leaves }, { data: rev }] = await Promise.all([
       supabase.from('users').select('*').eq('group_id', user.group_id).eq('is_active', true).neq('role','admin').order('full_name'),
       supabase.from('daily_submissions').select('*').eq('submission_date', today).in('user_id', []),
-      supabase.from('leave_periods').select('*').eq('status','approved').lte('start_date',today).gte('end_date',today),
+      supabase.from('leave_periods').select('*, covering_person:covering_person_id(id, full_name, rank, title, personnel_type)').eq('status','approved').lte('start_date',today).gte('end_date',today),
       supabase.from('group_reviews').select('*, reviewer:users(*)').eq('group_id', user.group_id).eq('review_date', today).single(),
     ])
 
@@ -181,10 +181,21 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
                 <div className="we-dot" style={{background:'var(--purple)'}} />
                 <div style={{flex:1}}>
                   <div style={{fontSize:13,fontWeight:500}}>{displayName(r.user)}</div>
-                  {leave && <div style={{fontSize:11,color:'var(--dim)'}}>
+                  {leave && (
+                  <div style={{fontSize:11,color:'var(--dim)'}}>
                     {leave.city?leave.city+', ':''}{leave.country} · Returns {formatDate(leave.end_date)}
                     {!leave.contactable && <span style={{color:'var(--red)',marginLeft:4,fontWeight:600}}> · NOT CONTACTABLE</span>}
-                  </div>}
+                  </div>
+                )}
+                {leave?.covering_person && (
+                  <div style={{fontSize:11,marginTop:2}}>
+                    <span style={{color:'var(--teal,#0891B2)'}}>👤 Covered by: </span>
+                    <span style={{fontWeight:600}}>
+                      {(leave.covering_person as any).personnel_type==='Military'?(leave.covering_person as any).rank:(leave.covering_person as any).title}{' '}
+                      {(leave.covering_person as any).full_name}
+                    </span>
+                  </div>
+                )}
                 </div>
                 <span className="we-chip" style={{background:r.leave?.contactable?'var(--green-bg)':'var(--red-bg)',color:r.leave?.contactable?'var(--green)':'var(--red)',fontSize:9}}>
                   {r.leave?.contactable?'Contactable':'No Contact'}

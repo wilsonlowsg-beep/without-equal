@@ -43,7 +43,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
     // Leave intelligence
     const { data: allLeaves } = await supabase
       .from('leave_periods')
-      .select('*, user:users(*)')
+      .select('*, user:users(*), covering_person:covering_person_id(id, full_name, rank, title, personnel_type)')
       .eq('status','approved')
 
     const overseas_now = (allLeaves??[]).filter(l => l.leave_type==='Overseas Leave' && today>=l.start_date && today<=l.end_date)
@@ -99,7 +99,10 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
     `Local Leave     : ${localLv}`,`Overseas Leave  : ${overseasLv}`,`Time Off        : ${timeOff}`,`Duty / Course   : ${duty}`,
     ...(totalShift>0?[`Day Shift       : ${dayShift}`,`Night Shift     : ${nightShift}`,`Rest Day        : ${restDay}`]:[]),
     '─────────────────────────',
-    ...(overseas.length>0?['Overseas Personnel:',...overseas.map(o=>`  · ${displayName(o.user)} [${o.leave.country}]${!o.leave.contactable?' ⚠ NOT CONTACTABLE':''}`)]:[]),
+    ...(overseas.length>0?['Overseas Personnel:',...overseas.map(o=>{
+      const cover = (o.leave as any).covering_person ? ` / Covered by: ${displayName((o.leave as any).covering_person)}` : ''
+      return `  · ${displayName(o.user)} [${o.leave.country}]${!o.leave.contactable?' ⚠ NOT CONTACTABLE':''}${cover}`
+    })]:[]),
     ...(returning.length>0?['Returning Today:',...returning.map(r=>`  · ${displayName(r.user)}`)]:[]),
     ...(retTomorrow.length>0?['Returning Tomorrow:',...retTomorrow.map(r=>`  · ${displayName(r.user)}`)]:[]),
     '─────────────────────────','Command Attention:',
@@ -330,6 +333,12 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
                   {!leave.contactable && <span style={{color:'var(--red)',fontWeight:600,marginLeft:4}}>⚠ NOT CONTACTABLE</span>}
                 </div>
                 {leave.emergency_contact && <div style={{fontSize:10,color:'var(--dim)'}}>Emergency: {leave.emergency_contact}</div>}
+                {(leave as any).covering_person && (
+                  <div style={{fontSize:11,marginTop:2}}>
+                    <span style={{color:'var(--teal,#0891B2)'}}>👤 Covered by: </span>
+                    <span style={{fontWeight:600}}>{displayName((leave as any).covering_person)}</span>
+                  </div>
+                )}
               </div>
               <span className="we-chip" style={{background:leave.contactable?'var(--green-bg)':'var(--red-bg)',color:leave.contactable?'var(--green)':'var(--red)',fontSize:9}}>
                 {leave.contactable?'✓ OK':'⚠ No Contact'}

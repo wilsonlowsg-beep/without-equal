@@ -56,8 +56,10 @@ export interface LeavePeriod {
   status: LeaveStatus
   approved_by?: string
   created_at: string
+  covering_person_id?: string    // optional: who covers while away
   // joined
   user?: User
+  covering_person?: User
 }
 
 export interface GroupReview {

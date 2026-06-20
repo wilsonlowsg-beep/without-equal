@@ -6,38 +6,51 @@ import type { User, LeavePeriod } from '@/types/database'
 import { todayStr, formatDate } from '@/lib/constants'
 
 export default function LeaveManager({ user, showToast }: { user: User; showToast: (m:string)=>void }) {
-  const [leaves,   setLeaves]   = useState<LeavePeriod[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [saving,   setSaving]   = useState(false)
-  const [formErr,  setFormErr]  = useState('')
+  const [leaves,    setLeaves]    = useState<LeavePeriod[]>([])
+  const [personnel, setPersonnel] = useState<User[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [showForm,  setShowForm]  = useState(false)
+  const [saving,    setSaving]    = useState(false)
+  const [formErr,   setFormErr]   = useState('')
   const supabase = createClient()
   const today = todayStr()
 
   const [form, setForm] = useState({
-    leave_type:        'Local Leave' as 'Local Leave' | 'Overseas Leave' | 'Time Off',
-    start_date:        today,
-    end_date:          today,
-    country:           '',
-    city:              '',
-    contactable:       true,
-    emergency_contact: '',
-    remarks:           '',
+    leave_type:          'Local Leave' as 'Local Leave' | 'Overseas Leave' | 'Time Off',
+    start_date:          today,
+    end_date:            today,
+    country:             '',
+    city:                '',
+    contactable:         true,
+    emergency_contact:   '',
+    remarks:             '',
+    covering_person_id:  '',
   })
   const upd = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
 
-  useEffect(() => { loadLeaves() }, [])
+  useEffect(() => { loadLeaves(); loadPersonnel() }, [])
 
   const loadLeaves = async () => {
     setLoading(true)
     const { data } = await supabase
       .from('leave_periods')
-      .select('*')
+      .select('*, covering_person:covering_person_id(id, full_name, rank, title, personnel_type)')
       .eq('user_id', user.id)
       .order('start_date', { ascending: false })
       .limit(20)
     setLeaves(data ?? [])
     setLoading(false)
+  }
+
+  const loadPersonnel = async () => {
+    const { data } = await supabase
+      .from('users')
+      .select('id, full_name, rank, title, personnel_type')
+      .eq('is_active', true)
+      .neq('role', 'admin')
+      .neq('id', user.id)
+      .order('full_name')
+    setPersonnel(data ?? [])
   }
 
   const submitLeave = async () => {
@@ -47,22 +60,23 @@ export default function LeaveManager({ user, showToast }: { user: User; showToas
     setSaving(true); setFormErr('')
 
     const { error } = await supabase.from('leave_periods').insert({
-      user_id:           user.id,
-      leave_type:        form.leave_type,
-      start_date:        form.start_date,
-      end_date:          form.end_date,
-      country:           form.leave_type === 'Overseas Leave' ? form.country           : null,
-      city:              form.leave_type === 'Overseas Leave' ? form.city              : null,
-      contactable:       form.leave_type === 'Overseas Leave' ? form.contactable       : true,
-      emergency_contact: form.leave_type === 'Overseas Leave' ? form.emergency_contact : null,
-      remarks:           form.remarks || null,
-      status:            'approved',
+      user_id:             user.id,
+      leave_type:          form.leave_type,
+      start_date:          form.start_date,
+      end_date:            form.end_date,
+      country:             form.leave_type === 'Overseas Leave' ? form.country           : null,
+      city:                form.leave_type === 'Overseas Leave' ? form.city              : null,
+      contactable:         form.leave_type === 'Overseas Leave' ? form.contactable       : true,
+      emergency_contact:   form.leave_type === 'Overseas Leave' ? form.emergency_contact : null,
+      remarks:             form.remarks || null,
+      covering_person_id:  form.covering_person_id || null,
+      status:              'approved',
     })
 
     if (error) { setFormErr('Error: ' + error.message); setSaving(false); return }
     showToast('Leave registered ✓ — system will auto-mark your status')
     setShowForm(false)
-    setForm({ leave_type:'Local Leave', start_date:today, end_date:today, country:'', city:'', contactable:true, emergency_contact:'', remarks:'' })
+    setForm({ leave_type:'Local Leave', start_date:today, end_date:today, country:'', city:'', contactable:true, emergency_contact:'', remarks:'', covering_person_id:'' })
     loadLeaves()
     setSaving(false)
   }
@@ -188,6 +202,27 @@ export default function LeaveManager({ user, showToast }: { user: User; showToas
             </>
           )}
 
+          {/* COVERING PERSON */}
+          <div className="fg">
+            <label className="we-label">Covering Person (optional)</label>
+            <select
+              className="we-input"
+              value={form.covering_person_id}
+              onChange={e => upd('covering_person_id', e.target.value)}
+              style={{ color: form.covering_person_id ? 'var(--text)' : 'var(--dim)' }}
+            >
+              <option value="">— None / Not applicable —</option>
+              {personnel.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.personnel_type === 'Military' ? p.rank : p.title} {p.full_name}
+                </option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 4 }}>
+              Who will handle your duties while you're away?
+            </div>
+          </div>
+
           <div className="fg">
             <label className="we-label">Remarks (optional)</label>
             <textarea className="we-input we-textarea" placeholder="e.g. Family trip, Annual leave block"
@@ -239,6 +274,17 @@ export default function LeaveManager({ user, showToast }: { user: User; showToas
                     {l.contactable ? 'Contactable' : 'Not Contactable'}
                   </span>
                   {l.emergency_contact && ` · ${l.emergency_contact}`}
+                </div>
+              )}
+              {l.covering_person && (
+                <div style={{ fontSize: 11, color: 'var(--dim)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ color: 'var(--teal,#0891B2)' }}>👤 Covered by:</span>
+                  <span style={{ fontWeight: 600 }}>
+                    {(l.covering_person as any).personnel_type === 'Military'
+                      ? (l.covering_person as any).rank
+                      : (l.covering_person as any).title}{' '}
+                    {(l.covering_person as any).full_name}
+                  </span>
                 </div>
               )}
               {l.remarks && <div style={{ fontSize: 11, color: 'var(--dim)', marginBottom: 8 }}>"{l.remarks}"</div>}
