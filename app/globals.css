@@ -50,9 +50,9 @@ html, body {
 .we-userline { font-size: 11px; color: var(--dim); margin-top: 4px; }
 
 /* ── NAV TABS ── */
-.we-nav      { display: flex; background: var(--bg); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; flex-shrink: 0; }
+.we-nav      { display: flex; background: var(--bg); border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; flex-shrink: 0; -webkit-overflow-scrolling: touch; }
 .we-nav::-webkit-scrollbar { display: none; }
-.we-navbtn   { flex: 1; min-width: 60px; padding: 9px 4px; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); border: none; background: none; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; transition: color .12s, border-color .12s; font-family: var(--sans); }
+.we-navbtn   { flex: 0 0 auto; padding: 9px 14px; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); border: none; background: none; cursor: pointer; white-space: nowrap; border-bottom: 2px solid transparent; transition: color .12s, border-color .12s; font-family: var(--sans); }
 .we-navbtn.active { color: var(--amber); border-bottom-color: var(--amber); }
 
 /* ── CARDS ── */
