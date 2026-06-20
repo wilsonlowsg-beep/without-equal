@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { GroupStats, User, LeavePeriod } from '@/types/database'
-import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel, WEEKEND_STATUS, PUBLIC_HOLIDAY_STATUS, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown } from '@/lib/constants'
+import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel, WEEKEND_STATUS, PUBLIC_HOLIDAY_STATUS, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown, isPastCutoff } from '@/lib/constants'
 
 export default function FormationDashboard({ showToast }: { showToast: (m:string)=>void }) {
   const [stats,    setStats]    = useState<GroupStats[]>([])
@@ -23,11 +23,23 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
   const [histTo,   setHistTo]   = useState(() => new Date().toISOString().slice(0,10))
   const [histLoading, setHistLoading] = useState(false)
   const [histMode, setHistMode] = useState<'summary'|'detailed'>('summary')
+  // Snapshot state
+  const [snapshot,  setSnapshot]  = useState<{id:string;captured_at:string;report_text:string}|null>(null)
+  const [snapView,  setSnapView]  = useState<'live'|'snapshot'>('live')
+  const reportRef = useRef('')  // keeps latest report text for snapshot capture
   const supabase = createClient()
   const today    = todayStr()
   const tomorrow = tomorrowStr()
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    loadData()
+    loadSnapshot()
+  }, [])
+
+  // Auto-capture snapshot after data loads, if past 0830 and none exists today
+  useEffect(() => {
+    if (!loading) captureSnapshotIfNeeded()
+  }, [loading])
 
   const loadData = async () => {
     setLoading(true)
@@ -59,6 +71,32 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
     setRetTomorrow(returning_tom.map(l=>({user:l.user,leave:l})))
     setNotCon(not_contactable.map(l=>({user:l.user,leave:l})))
     setLoading(false)
+  }
+
+  const loadSnapshot = async () => {
+    const { data } = await supabase
+      .from('formation_snapshots')
+      .select('id, captured_at, report_text')
+      .eq('snapshot_date', today)
+      .single()
+    if (data) setSnapshot(data)
+  }
+
+  const captureSnapshotIfNeeded = async () => {
+    if (!isPastCutoff()) return
+    const { data: existing } = await supabase
+      .from('formation_snapshots')
+      .select('id, captured_at, report_text')
+      .eq('snapshot_date', today)
+      .single()
+    if (existing) { setSnapshot(existing); return }
+    // First AC3/admin to open the dashboard after 0830 — capture the state
+    const { data: saved } = await supabase
+      .from('formation_snapshots')
+      .insert({ snapshot_date: today, captured_at: new Date().toISOString(), report_text: reportRef.current })
+      .select('id, captured_at, report_text')
+      .single()
+    if (saved) setSnapshot(saved)
   }
 
   const total        = stats.reduce((a,b)=>a+(b.strength??0),0)
@@ -132,6 +170,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
   ].join('\n')
 
   const reportText = buildReport()
+  reportRef.current = reportText  // keep ref in sync for snapshot capture
 
   const copyReport = (fmt: string) => {
     let text = reportText
@@ -261,6 +300,62 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
         <div style={{fontSize:13,fontWeight:700,letterSpacing:'0.1em',color:'var(--amber)',marginTop:4}}>WITHOUT EQUAL · DAILY READINESS PICTURE</div>
         <div style={{fontSize:11,color:'var(--dim)',marginTop:3,fontFamily:'var(--mono)'}}>{today}</div>
       </div>
+
+      {/* LIVE / SNAPSHOT TOGGLE */}
+      <div style={{display:'flex',gap:6,marginBottom:12}}>
+        <button className={`we-pill${snapView==='live'?' on':''}`} onClick={()=>setSnapView('live')}>
+          📡 Live
+        </button>
+        <button
+          className={`we-pill${snapView==='snapshot'?' on':''}`}
+          onClick={()=>{ if(snapshot) setSnapView('snapshot') }}
+          style={{opacity:snapshot?1:0.4,cursor:snapshot?'pointer':'default'}}
+        >
+          📸 0830 Snapshot{!snapshot ? ' (pending)' : ''}
+        </button>
+        {snapshot && (
+          <span style={{fontSize:10,color:'var(--dim)',alignSelf:'center',fontFamily:'var(--mono)',marginLeft:2}}>
+            {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H
+          </span>
+        )}
+      </div>
+
+      {/* SNAPSHOT VIEW */}
+      {snapView === 'snapshot' && snapshot && (
+        <div>
+          <div className="we-card amber" style={{marginBottom:10,padding:'10px 14px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div style={{fontSize:18}}>📸</div>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:'var(--amber)'}}>0830 Snapshot · {today}</div>
+                <div style={{fontSize:10,color:'var(--dim)',marginTop:2}}>
+                  Captured at {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H — reflects formation state at that moment
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="we-card" style={{marginBottom:10}}>
+            <pre style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--text)',whiteSpace:'pre-wrap',lineHeight:1.7,margin:0}}>
+              {snapshot.report_text}
+            </pre>
+          </div>
+          <div style={{display:'flex',gap:8,marginBottom:16}}>
+            <button className="btn btn-secondary" style={{flex:1}} onClick={()=>navigator.clipboard.writeText(snapshot.report_text).then(()=>showToast('Snapshot copied ✓'))}>
+              📋 Copy
+            </button>
+            <button className="btn btn-secondary" style={{flex:1}} onClick={()=>navigator.clipboard.writeText(snapshot.report_text.replace(/─+/g,'---')).then(()=>showToast('Copied (WhatsApp) ✓'))}>
+              💬 WhatsApp
+            </button>
+          </div>
+          <div style={{textAlign:'center',marginBottom:16}}>
+            <button onClick={()=>setSnapView('live')} style={{fontSize:12,color:'var(--dim)',background:'none',border:'1px solid var(--border)',borderRadius:8,padding:'7px 18px',cursor:'pointer',fontFamily:'var(--sans)'}}>
+              Switch to Live View →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {snapView === 'live' && <div>
 
       {/* FORMATION SUMMARY */}
       <div className="we-card">
@@ -568,6 +663,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
           RESTRICTED · Formation use only · Do not share externally
         </div>
       </div>
+    </div>} {/* end snapView === 'live' */}
     </div>
   )
 }

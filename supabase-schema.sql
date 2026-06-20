@@ -320,6 +320,30 @@ ALTER TABLE users
   CHECK (work_schedule IN ('weekdays','shift'));
 
 -- ============================================================
+-- FORMATION SNAPSHOTS — daily 0830 state capture
+-- ============================================================
+CREATE TABLE IF NOT EXISTS formation_snapshots (
+  id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  snapshot_date DATE NOT NULL UNIQUE,
+  captured_at   TIMESTAMPTZ NOT NULL,
+  report_text   TEXT NOT NULL,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE formation_snapshots ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "fs_read"   ON formation_snapshots;
+DROP POLICY IF EXISTS "fs_insert" ON formation_snapshots;
+
+-- All authenticated users can read (group heads need it too)
+CREATE POLICY "fs_read"   ON formation_snapshots
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+-- Only AC3 / admin can insert
+CREATE POLICY "fs_insert" ON formation_snapshots
+  FOR INSERT WITH CHECK (get_my_role() IN ('ac3', 'admin'));
+
+-- ============================================================
 -- AUTO-MARK LEAVE FUNCTION
 -- Call daily at 0000H via Supabase cron or Vercel cron
 -- ============================================================
