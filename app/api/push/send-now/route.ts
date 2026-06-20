@@ -39,14 +39,14 @@ export async function POST(req: NextRequest) {
       .eq('id', userId)
       .single()
 
-    if (!caller || !['admin', 'grouphead'].includes(caller.role))
-      return NextResponse.json({ error: 'Forbidden — admin or group head only' }, { status: 403 })
+    if (!caller || !['admin', 'ac3', 'grouphead'].includes(caller.role))
+      return NextResponse.json({ error: 'Forbidden — admin, AC3 or group head only' }, { status: 403 })
 
-    // Group heads can only target their own group
+    // Group heads can only target their own group; admin + ac3 can target any
     const effectiveGroup: number | null =
       caller.role === 'grouphead'
-        ? caller.group_id                          // always own group
-        : (targetGroup != null ? targetGroup : null) // admin: null = all
+        ? caller.group_id                            // always own group
+        : (targetGroup != null ? targetGroup : null) // admin/ac3: null = all
 
     // Fetch push subscriptions, filtered by group if needed
     let subsQuery = db

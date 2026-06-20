@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { GroupStats, User, LeavePeriod } from '@/types/database'
 import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel, WEEKEND_STATUS, PUBLIC_HOLIDAY_STATUS, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown, isPastCutoff } from '@/lib/constants'
+import PushSender from './PushSender'
 
-export default function FormationDashboard({ showToast }: { showToast: (m:string)=>void }) {
+export default function FormationDashboard({ user, showToast }: { user: User; showToast: (m:string)=>void }) {
   const [stats,    setStats]    = useState<GroupStats[]>([])
   const [overseas, setOverseas] = useState<{user:User;leave:LeavePeriod}[]>([])
   const [returning,setReturning]= useState<{user:User;leave:LeavePeriod}[]>([])
@@ -647,6 +648,17 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
           RESTRICTED · Formation use only · Do not share externally
         </div>
       </div>
+
+      {/* PUSH NOTIFICATION SENDER */}
+      <div style={{marginTop:12}}>
+        <PushSender
+          userId={user.id}
+          role={user.role as 'admin' | 'ac3' | 'grouphead'}
+          myGroupId={user.group_id}
+          showToast={showToast}
+        />
+      </div>
+
     </div>} {/* end snapView === 'live' */}
     </div>
   )

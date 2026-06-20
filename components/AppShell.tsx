@@ -288,7 +288,7 @@ export default function AppShell({ user, onLogout }: { user: User; onLogout: ()=
       case 'history':   return <MyHistory      user={user} />
       case 'leave':     return <LeaveManager   user={user} showToast={showToast} />
       case 'group':     return <GroupDashboard user={user} showToast={showToast} />
-      case 'formation': return <FormationDashboard showToast={showToast} />
+      case 'formation': return <FormationDashboard user={user} showToast={showToast} />
       case 'trends':    return <TrendsView />
       case 'admin':     return <AdminDashboard showToast={showToast} />
       default:          return null

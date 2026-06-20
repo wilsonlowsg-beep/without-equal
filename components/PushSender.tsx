@@ -17,7 +17,7 @@ import { GROUPS } from '@/lib/constants'
 
 interface Props {
   userId:    string
-  role:      'admin' | 'grouphead'
+  role:      'admin' | 'ac3' | 'grouphead'
   myGroupId: number
   showToast: (msg: string) => void
   onSent?:   (result: { sent: number; failed: number }) => void
@@ -31,7 +31,7 @@ const QUICK_MESSAGES = [
 ]
 
 export default function PushSender({ userId, role, myGroupId, showToast, onSent }: Props) {
-  const isAdmin = role === 'admin'
+  const isAdmin = role === 'admin' || role === 'ac3'
 
   // Target selection — group heads locked to own group
   const [targetGroup, setTargetGroup] = useState<number | 'all'>(isAdmin ? 'all' : myGroupId)
