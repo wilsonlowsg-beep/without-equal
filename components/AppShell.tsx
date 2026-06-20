@@ -92,13 +92,19 @@ export default function AppShell({ user, onLogout }: { user: User; onLogout: ()=
 
   const showToast = (msg: string) => { setToast(null); setTimeout(()=>setToast(msg),10) }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
+  const handleLogout = () => {
+    // Show motivation first — sign out only after it's dismissed
     setShowM(true)
   }
 
   if (showMotivation) return (
-    <MotivationScreen name={user.full_name.split(' ').pop() ?? user.full_name} onDone={onLogout} />
+    <MotivationScreen
+      name={user.full_name.split(' ').pop() ?? user.full_name}
+      onDone={async () => {
+        await supabase.auth.signOut()
+        onLogout()
+      }}
+    />
   )
 
   const grpName = GROUPS.find(g=>g.id===user.group_id)?.name ?? ''
