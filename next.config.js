@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path')
+
 const nextConfig = {
   reactStrictMode: true,
   typescript: {
@@ -7,14 +9,19 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Allow service worker to control the entire app scope
+  // Explicit @/ alias so webpack never relies solely on tsconfig paths parsing
+  webpack: (config) => {
+    config.resolve.alias['@'] = path.resolve(__dirname)
+    return config
+  },
+  // Service worker and manifest headers
   async headers() {
     return [
       {
         source: '/sw.js',
         headers: [
-          { key: 'Cache-Control',   value: 'no-cache, no-store, must-revalidate' },
-          { key: 'Content-Type',    value: 'application/javascript; charset=utf-8' },
+          { key: 'Cache-Control',          value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Content-Type',           value: 'application/javascript; charset=utf-8' },
           { key: 'Service-Worker-Allowed', value: '/' },
         ],
       },
