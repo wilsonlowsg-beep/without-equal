@@ -2,7 +2,7 @@
   "framework": "nextjs",
   "buildCommand": "next build",
   "devCommand": "next dev",
-  "installCommand": "npm ci",
+  "installCommand": "npm install --omit=dev --legacy-peer-deps",
   "regions": ["sin1"],
   "crons": [
     {
