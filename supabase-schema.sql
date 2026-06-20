@@ -344,6 +344,30 @@ CREATE POLICY "fs_insert" ON formation_snapshots
   FOR INSERT WITH CHECK (get_my_role() IN ('ac3', 'admin'));
 
 -- ============================================================
+-- GROUP SNAPSHOTS — daily 0830 state capture per group
+-- ============================================================
+CREATE TABLE IF NOT EXISTS group_snapshots (
+  id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  snapshot_date DATE NOT NULL,
+  group_id      INTEGER NOT NULL,
+  captured_at   TIMESTAMPTZ NOT NULL,
+  report_text   TEXT NOT NULL,
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(snapshot_date, group_id)
+);
+
+ALTER TABLE group_snapshots ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "gs_read"   ON group_snapshots;
+DROP POLICY IF EXISTS "gs_insert" ON group_snapshots;
+
+CREATE POLICY "gs_read" ON group_snapshots
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "gs_insert" ON group_snapshots
+  FOR INSERT WITH CHECK (get_my_role() IN ('grouphead', 'ac3', 'admin'));
+
+-- ============================================================
 -- AUTO-MARK LEAVE FUNCTION
 -- Call daily at 0000H via Supabase cron or Vercel cron
 -- ============================================================

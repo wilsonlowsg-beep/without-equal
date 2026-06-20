@@ -172,11 +172,6 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
   const reportText = buildReport()
   reportRef.current = reportText  // keep ref in sync for snapshot capture
 
-  const copyReport = (fmt: string) => {
-    let text = reportText
-    if (fmt==='whatsapp') text = reportText.replace(/─+/g,'---')
-    navigator.clipboard.writeText(text).then(()=>showToast(`Copied (${fmt}) ✓`)).catch(()=>showToast('Tap Copy again'))
-  }
 
   const generateAI = async () => {
     setAiL(true); setAiS(true); setAiText(null)
@@ -580,17 +575,6 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
           )
         })}
         {filtered.length>25&&<div style={{fontSize:11,color:'var(--dim)',textAlign:'center',paddingTop:8}}>+{filtered.length-25} more</div>}
-      </div>
-
-      {/* 0830 REPORT */}
-      <div className="we-card dark">
-        <div className="we-clabel cl-amber">📋 0830 Daily Readiness Report</div>
-        <div className="we-report">{reportText}</div>
-        <div className="we-exportrow">
-          <button className="we-exportbtn" onClick={()=>copyReport('plain')}>📋 Copy</button>
-          <button className="we-exportbtn" onClick={()=>copyReport('whatsapp')}>💬 WhatsApp</button>
-          <button className="we-exportbtn" onClick={()=>copyReport('email')}>📧 Email</button>
-        </div>
       </div>
 
       {/* AI SUMMARY */}
