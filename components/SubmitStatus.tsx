@@ -15,8 +15,10 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
   const [amendReason, setAmendR]    = useState('')
   const [loading,     setLoading]   = useState(true)
   const [saving,      setSaving]    = useState(false)
-  const [preReport,   setPreReport] = useState(false) // true = submitting for tomorrow
-  const [medEndDate,  setMedEnd]    = useState('')    // MC/medical expiry date
+  const [preReport,    setPreReport] = useState(false) // true = submitting for tomorrow
+  const [medEndDate,   setMedEnd]   = useState('')    // MC/medical expiry date
+  const [coverPerson,  setCoverP]   = useState('')    // covering person ID for leave
+  const [personnel,    setPersonnel] = useState<User[]>([])
   const supabase = createClient()
   const today    = todayStr()
   const tomorrow = tomorrowStr()
@@ -24,7 +26,13 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
   const canPreReport = new Date().getHours() >= PRE_REPORT_HOUR  // after 1800
   const targetDate   = preReport ? tomorrow : today
 
-  useEffect(() => { loadData() }, [])
+  useEffect(() => {
+    loadData()
+    // Fetch personnel list for covering person dropdown
+    supabase.from('users').select('id, full_name, rank, title, personnel_type')
+      .eq('is_active', true).neq('role', 'admin').neq('id', user.id).order('full_name')
+      .then(({ data }) => setPersonnel(data ?? []))
+  }, [])
 
   const loadData = async () => {
     setLoading(true)
@@ -57,7 +65,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
     setAutoLeave(activeleave)
     setTodaySub(sub)
     setTomSub(tomSub)
-    if (sub) { setSelected(sub.status); setRemarks(sub.remarks ?? ''); setMedEnd(sub.medical_end_date ?? '') }
+    if (sub) { setSelected(sub.status); setRemarks(sub.remarks ?? ''); setMedEnd(sub.medical_end_date ?? ''); setCoverP(sub.covering_person_id ?? '') }
     setLoading(false)
   }
 
@@ -75,7 +83,8 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
         submitted_at: now.toISOString(),
         is_amended: false,
         is_auto: false,
-        medical_end_date: isMedical && medEndDate ? medEndDate : null,
+        medical_end_date:   isMedical && medEndDate ? medEndDate : null,
+        covering_person_id: LEAVE_STATUSES.includes(selected!) && coverPerson ? coverPerson : null,
       }, { onConflict: 'user_id,submission_date' })
       .select()
       .single()
@@ -83,7 +92,7 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
     if (!error) {
       if (preReport) { setTomSub(data); showToast(`Pre-report for ${tomorrow} submitted ✓`) }
       else           { setTodaySub(data); showToast('Status submitted ✓') }
-      setSelected(null); setRemarks(''); setMedEnd('')
+      setSelected(null); setRemarks(''); setMedEnd(''); setCoverP('')
     } else showToast('Error: ' + error.message)
     setSaving(false)
   }
@@ -105,7 +114,8 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
         amend_reason: amendReason,
         amended_at: now.toISOString(),
         is_auto: false,
-        medical_end_date: isMedical && medEndDate ? medEndDate : null,
+        medical_end_date:   isMedical && medEndDate ? medEndDate : null,
+        covering_person_id: LEAVE_STATUSES.includes(selected!) && coverPerson ? coverPerson : null,
       }, { onConflict: 'user_id,submission_date' })
       .select().single()
 
@@ -230,6 +240,23 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
           />
         </div>
       )}
+      {selected && LEAVE_STATUSES.includes(selected) && (
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,padding:'8px 12px',background:'var(--surf-hi)',borderRadius:8,border:'1px solid var(--border)'}}>
+          <span style={{fontSize:12,color:'var(--dim)',whiteSpace:'nowrap',flexShrink:0}}>👤 Covered by</span>
+          <select
+            value={coverPerson}
+            onChange={e => setCoverP(e.target.value)}
+            style={{flex:1,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,color:coverPerson?'var(--text)':'var(--dim)',fontSize:12,padding:'5px 8px',fontFamily:'var(--sans)'}}
+          >
+            <option value="">— Optional —</option>
+            {personnel.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.personnel_type === 'Military' ? p.rank : p.title} {p.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="fg"><label className="we-label">Remarks</label>
         <textarea className="we-input we-textarea" value={remarks} onChange={e=>setRemarks(e.target.value)} /></div>
       <div style={{display:'flex',gap:8}}>
@@ -307,10 +334,34 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
         </div>
       ))}
 
-      {selected && LEAVE_STATUSES.includes(selected) && selected !== 'Time Off' && (
-        <div className="we-leave-panel">
-          <div className="we-leave-panel-title">Leave details — submit via My Leave tab for multi-day leave</div>
-          <div style={{fontSize:12,color:'var(--dim)'}}>For single-day: add remarks below. For multi-day leave that covers future dates, use the <strong style={{color:'var(--amber)'}}>My Leave</strong> tab to register your leave period — you won't need to report daily during that period.</div>
+      {selected && LEAVE_STATUSES.includes(selected) && (
+        <div className="we-leave-panel" style={{padding:'10px 14px'}}>
+          {selected !== 'Time Off' && (
+            <div style={{marginBottom:10}}>
+              <div className="we-leave-panel-title" style={{marginBottom:4}}>Multi-day leave?</div>
+              <div style={{fontSize:12,color:'var(--dim)'}}>Use the <strong style={{color:'var(--amber)'}}>My Leave</strong> tab — you won't need to report daily during that period.</div>
+            </div>
+          )}
+          {/* Covering person — inline, no extra clicks */}
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:12,color:'var(--dim)',whiteSpace:'nowrap',flexShrink:0}}>👤 Covered by</span>
+            <select
+              value={coverPerson}
+              onChange={e => setCoverP(e.target.value)}
+              style={{
+                flex:1, background:'var(--surf-hi)', border:'1px solid var(--border)',
+                borderRadius:6, color: coverPerson ? 'var(--text)' : 'var(--dim)',
+                fontSize:12, padding:'5px 8px', fontFamily:'var(--sans)',
+              }}
+            >
+              <option value="">— Optional —</option>
+              {personnel.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.personnel_type === 'Military' ? p.rank : p.title} {p.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 

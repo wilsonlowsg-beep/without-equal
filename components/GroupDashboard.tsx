@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod, GroupReview } from '@/types/database'
-import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel } from '@/lib/constants'
+import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel, LEAVE_STATUSES } from '@/lib/constants'
 
 interface PersonnelRow {
   user: User
@@ -34,7 +34,9 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
     // Re-fetch subs now that we have member IDs
     const memberIds = (members ?? []).map(m => m.id)
     const { data: todaySubs } = await supabase
-      .from('daily_submissions').select('*').eq('submission_date', today).in('user_id', memberIds)
+      .from('daily_submissions')
+      .select('*, covering_person:covering_person_id(id, full_name, rank, title, personnel_type)')
+      .eq('submission_date', today).in('user_id', memberIds)
 
     const combined: PersonnelRow[] = (members ?? []).map(m => ({
       user: m,
@@ -131,9 +133,20 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
                     </td>
                     <td style={{textAlign:'left'}}>
                       {r.sub ? (
-                        <span className="we-chip" style={{background:statusColor(r.sub.status)+'18',color:statusColor(r.sub.status),border:`1px solid ${statusColor(r.sub.status)}33`,fontSize:10}}>
-                          {isAuto ? '🤖 ' : ''}{r.sub.status}
-                        </span>
+                        <div>
+                          <span className="we-chip" style={{background:statusColor(r.sub.status)+'18',color:statusColor(r.sub.status),border:`1px solid ${statusColor(r.sub.status)}33`,fontSize:10}}>
+                            {isAuto ? '🤖 ' : ''}{r.sub.status}
+                          </span>
+                          {/* Covering person — from submission or from leave record */}
+                          {LEAVE_STATUSES.includes(r.sub.status) && (() => {
+                            const cp = (r.sub as any).covering_person ?? (r.leave as any)?.covering_person
+                            return cp ? (
+                              <div style={{fontSize:9,color:'var(--teal,#0891B2)',marginTop:3,whiteSpace:'nowrap'}}>
+                                👤 {cp.personnel_type==='Military'?cp.rank:cp.title} {cp.full_name}
+                              </div>
+                            ) : null
+                          })()}
+                        </div>
                       ) : (
                         <span className="we-chip" style={{background:'var(--red-bg)',color:'var(--red)',border:'1px solid rgba(220,53,69,.2)',fontSize:10}}>Pending</span>
                       )}

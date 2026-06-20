@@ -37,9 +37,11 @@ export interface DailySubmission {
   amended_at?: string
   is_auto: boolean
   auto_reason?: string
-  medical_end_date?: string  // MC / Attend B/C expiry date
+  medical_end_date?: string      // MC / Attend B/C expiry date
+  covering_person_id?: string    // who covers for single-day leave
   // joined
   user?: User
+  covering_person?: User
 }
 
 export interface LeavePeriod {

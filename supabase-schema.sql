@@ -312,6 +312,9 @@ ALTER TABLE daily_submissions
 ALTER TABLE leave_periods
   ADD COLUMN IF NOT EXISTS covering_person_id UUID REFERENCES users(id) ON DELETE SET NULL;
 
+ALTER TABLE daily_submissions
+  ADD COLUMN IF NOT EXISTS covering_person_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
 -- ============================================================
 -- AUTO-MARK LEAVE FUNCTION
 -- Call daily at 0000H via Supabase cron or Vercel cron

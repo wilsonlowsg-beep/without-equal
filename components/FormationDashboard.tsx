@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { GroupStats, User, LeavePeriod } from '@/types/database'
-import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, medicalDurationLabel } from '@/lib/constants'
+import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel } from '@/lib/constants'
 
 export default function FormationDashboard({ showToast }: { showToast: (m:string)=>void }) {
   const [stats,    setStats]    = useState<GroupStats[]>([])
@@ -37,7 +37,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
     // All users and today's subs for filter panel
     const [{ data: users }, { data: subs }] = await Promise.all([
       supabase.from('users').select('*').eq('is_active',true).neq('role','admin').order('full_name'),
-      supabase.from('daily_submissions').select('*').eq('submission_date',today),
+      supabase.from('daily_submissions').select('*, covering_person:covering_person_id(id, full_name, rank, title, personnel_type)').eq('submission_date',today),
     ])
 
     // Leave intelligence
@@ -429,10 +429,18 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
                 <div style={{fontSize:13,fontWeight:500}}>{displayName(u)}</div>
                 <div style={{fontSize:10,color:'var(--dim)'}}>{grp} · {u.appointment}</div>
               </div>
-              {sub
-                ? <span className="we-chip" style={{background:statusColor(sub.status)+'18',color:statusColor(sub.status),border:`1px solid ${statusColor(sub.status)}33`,fontSize:10}}>{sub.is_auto?'🤖 ':''}{sub.status}</span>
-                : <span className="we-chip" style={{background:'var(--red-bg)',color:'var(--red)',fontSize:10}}>Pending</span>
-              }
+              {sub ? (
+                <div style={{textAlign:'right'}}>
+                  <span className="we-chip" style={{background:statusColor(sub.status)+'18',color:statusColor(sub.status),border:`1px solid ${statusColor(sub.status)}33`,fontSize:10}}>{sub.is_auto?'🤖 ':''}{sub.status}</span>
+                  {LEAVE_STATUSES.includes(sub.status) && (sub as any).covering_person && (
+                    <div style={{fontSize:9,color:'var(--teal,#0891B2)',marginTop:2}}>
+                      👤 {(sub as any).covering_person.personnel_type==='Military'?(sub as any).covering_person.rank:(sub as any).covering_person.title} {(sub as any).covering_person.full_name}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <span className="we-chip" style={{background:'var(--red-bg)',color:'var(--red)',fontSize:10}}>Pending</span>
+              )}
             </div>
           )
         })}
