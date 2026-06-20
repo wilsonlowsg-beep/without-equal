@@ -17,6 +17,7 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
   const [loading, setLoading] = useState(true)
   const [snapshot,  setSnapshot]  = useState<{id:string;captured_at:string;report_text:string}|null>(null)
   const [snapView,  setSnapView]  = useState<'live'|'snapshot'>('live')
+  const [schedEdit, setSchedEdit] = useState<User|null>(null)
   const reportRef = useRef('')
   const supabase = createClient()
   const today    = todayStr()
@@ -96,6 +97,20 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
       }, { onConflict: 'group_id,review_date' })
       .select('*, reviewer:users(*)').single()
     if (!error) { setReview(data); showToast('Group marked Reviewed ✓') }
+  }
+
+  const saveSchedule = async (targetUser: User, schedule: string) => {
+    const { error } = await supabase.rpc('set_work_schedule', {
+      target_user_id: targetUser.id,
+      new_schedule: schedule,
+    })
+    if (error) { showToast('Error: ' + error.message); return }
+    // Update local state immediately
+    setRows(prev => prev.map(r =>
+      r.user.id === targetUser.id ? { ...r, user: { ...r.user, work_schedule: schedule } as User } : r
+    ))
+    showToast(`${lastName(targetUser)} → ${schedule === 'shift' ? 'Shift / 24-7' : 'Mon–Fri'} ✓`)
+    setSchedEdit(null)
   }
 
   if (loading) return <div style={{padding:24,color:'var(--dim)',fontSize:13}}>Loading…</div>
@@ -257,18 +272,24 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
 
         {/* PERSONNEL TABLE */}
         <div className="we-card">
-          <div className="we-clabel">Personnel Status</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+            <div className="we-clabel" style={{marginBottom:0}}>Personnel Status</div>
+            <span style={{fontSize:10,color:'var(--dim)'}}>Tap name to set schedule</span>
+          </div>
           <div className="we-tablewrap">
             <table className="we-table">
               <thead><tr><th>Name</th><th>Status</th><th>Time</th></tr></thead>
               <tbody>
                 {rows.map(r => {
                   const isAuto = r.sub?.is_auto
+                  const sched  = (r.user as any).work_schedule ?? 'weekdays'
                   return (
                     <tr key={r.user.id}>
-                      <td>
+                      <td style={{cursor:'pointer'}} onClick={()=>setSchedEdit(r.user)}>
                         <div style={{fontWeight:600,fontSize:12}}>{lastName(r.user)}</div>
-                        <div style={{fontSize:10,color:'var(--dim)'}}>{r.user.rank||r.user.title}</div>
+                        <div style={{fontSize:10,color:sched==='shift'?'var(--teal,#0891B2)':'var(--dim)'}}>
+                          {sched==='shift'?'🔄 Shift':'📅 Mon–Fri'}
+                        </div>
                       </td>
                       <td style={{textAlign:'left'}}>
                         {r.sub ? (
@@ -423,6 +444,41 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
           )}
         </div>
       </div>}
+
+      {/* WORK SCHEDULE EDIT MODAL */}
+      {schedEdit && (
+        <div style={{position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setSchedEdit(null)}>
+          <div style={{background:'var(--surf)',border:'1px solid var(--border)',borderRadius:'14px 14px 0 0',padding:'20px 18px 40px',width:'100%',maxWidth:430}} onClick={e=>e.stopPropagation()}>
+            <div style={{width:36,height:4,borderRadius:4,background:'var(--border)',margin:'0 auto 16px'}}/>
+            <div style={{fontSize:14,fontWeight:700,marginBottom:2}}>{displayName(schedEdit)}</div>
+            <div style={{fontSize:11,color:'var(--dim)',marginBottom:16}}>{schedEdit.appointment}</div>
+
+            <div className="we-label" style={{marginBottom:10}}>Work Schedule</div>
+            <div className="g2" style={{gap:8,marginBottom:20}}>
+              {[
+                { v:'weekdays', label:'📅 Mon–Fri',      desc:'No weekend or PH reporting' },
+                { v:'shift',    label:'🔄 Shift / 24-7', desc:'Reports daily incl. weekends & PH' },
+              ].map(opt => {
+                const current = (schedEdit as any).work_schedule ?? 'weekdays'
+                return (
+                  <button key={opt.v} onClick={()=>saveSchedule(schedEdit, opt.v)} style={{
+                    padding:'12px 14px', borderRadius:8, cursor:'pointer', textAlign:'left',
+                    border:`1.5px solid ${current===opt.v?'var(--amber)':'var(--border)'}`,
+                    background: current===opt.v?'rgba(232,160,32,0.1)':'var(--surf-hi)',
+                    color: current===opt.v?'var(--text)':'var(--dim)',
+                    fontFamily:'var(--sans)', width:'100%',
+                  }}>
+                    <div style={{fontSize:13,fontWeight:600}}>{opt.label}</div>
+                    <div style={{fontSize:10,marginTop:3,opacity:0.7}}>{opt.desc}</div>
+                    {current===opt.v && <div style={{fontSize:10,color:'var(--amber)',marginTop:4}}>✓ Current</div>}
+                  </button>
+                )
+              })}
+            </div>
+            <button className="btn btn-secondary" style={{width:'100%'}} onClick={()=>setSchedEdit(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

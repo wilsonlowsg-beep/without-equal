@@ -368,6 +368,35 @@ CREATE POLICY "gs_insert" ON group_snapshots
   FOR INSERT WITH CHECK (get_my_role() IN ('grouphead', 'ac3', 'admin'));
 
 -- ============================================================
+-- WORK SCHEDULE UPDATE — group heads can set schedule for
+-- personnel in their own group; ac3/admin can set anyone
+-- ============================================================
+CREATE OR REPLACE FUNCTION set_work_schedule(target_user_id UUID, new_schedule TEXT)
+RETURNS VOID AS $$
+BEGIN
+  IF new_schedule NOT IN ('weekdays', 'shift') THEN
+    RAISE EXCEPTION 'Invalid schedule value';
+  END IF;
+
+  IF get_my_role() IN ('ac3', 'admin') THEN
+    UPDATE users SET work_schedule = new_schedule WHERE id = target_user_id;
+
+  ELSIF get_my_role() = 'grouphead' THEN
+    -- Verify the target user is in the caller's group
+    IF NOT EXISTS (
+      SELECT 1 FROM users WHERE id = target_user_id AND group_id = get_my_group()
+    ) THEN
+      RAISE EXCEPTION 'User is not in your group';
+    END IF;
+    UPDATE users SET work_schedule = new_schedule WHERE id = target_user_id;
+
+  ELSE
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
 -- AUTO-MARK LEAVE FUNCTION
 -- Call daily at 0000H via Supabase cron or Vercel cron
 -- ============================================================
