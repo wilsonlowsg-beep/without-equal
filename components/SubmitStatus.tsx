@@ -37,6 +37,11 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
 
   const loadData = async () => {
     setLoading(true)
+    // Safety: never hang indefinitely — give up after 8s
+    const abort = new AbortController()
+    const safeguard = setTimeout(() => { abort.abort(); setLoading(false) }, 8000)
+
+    try {
     // Load today's submission
     const { data: sub } = await supabase
       .from('daily_submissions')
@@ -89,7 +94,12 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
       if (wkSub) setTodaySub(wkSub)
     }
 
-    setLoading(false)
+    } catch(e) {
+      // swallow — safeguard timer above handles the loading state
+    } finally {
+      clearTimeout(safeguard)
+      setLoading(false)
+    }
   }
 
   const submit = async () => {
