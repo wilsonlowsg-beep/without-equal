@@ -105,14 +105,16 @@ export function isPastCutoff(now = new Date()): boolean {
     (now.getHours() === CUTOFF_HOUR && now.getMinutes() >= CUTOFF_MINUTE)
 }
 
+/** Returns today's date in SGT (UTC+8) as YYYY-MM-DD */
 export function todayStr(): string {
-  return new Date().toISOString().slice(0, 10)
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
 }
 
+/** Returns tomorrow's date in SGT as YYYY-MM-DD */
 export function tomorrowStr(): string {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  return d.toISOString().slice(0, 10)
+  const sgt = new Date(Date.now() + 8 * 3600_000)
+  sgt.setUTCDate(sgt.getUTCDate() + 1)
+  return sgt.toISOString().slice(0, 10)
 }
 
 export function nextWorkingDay(): string {

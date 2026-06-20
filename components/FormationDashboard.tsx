@@ -312,7 +312,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
         >
           📸 0830 Snapshot{!snapshot ? ' (pending)' : ''}
         </button>
-        {snapshot && (
+        {snapshot && snapView === 'live' && (
           <span style={{fontSize:10,color:'var(--dim)',alignSelf:'center',fontFamily:'var(--mono)',marginLeft:2}}>
             CAA {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H
           </span>
@@ -328,7 +328,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
               <div>
                 <div style={{fontSize:12,fontWeight:700,color:'var(--amber)'}}>0830 Snapshot · {today}</div>
                 <div style={{fontSize:10,color:'var(--dim)',marginTop:2}}>
-                  Captured at {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H — reflects formation state at that moment
+                  CAA {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H — reflects formation state at that moment
                 </div>
               </div>
             </div>
