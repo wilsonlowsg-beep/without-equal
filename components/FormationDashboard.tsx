@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { GroupStats, User, LeavePeriod } from '@/types/database'
-import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel, WEEKEND_STATUS, PUBLIC_HOLIDAY_STATUS, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown, isPastCutoff } from '@/lib/constants'
+import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel, WEEKEND_STATUS, PUBLIC_HOLIDAY_STATUS, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown, isPastCutoff, dayOfWeek } from '@/lib/constants'
 
 export default function FormationDashboard({ user, showToast }: { user: User; showToast: (m:string)=>void }) {
   const [stats,    setStats]    = useState<GroupStats[]>([])
@@ -220,11 +220,12 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
           .eq('is_active', true).neq('role', 'admin').order('full_name')
         const users = activeUsers ?? []
 
-        const header = ['Date','Name','Personnel_Type','Rank_Title','Group','Appointment','Status','Time_Submitted','Auto','Amended','Remarks']
+        const header = ['Date','Day','Name','Personnel_Type','Rank_Title','Group','Appointment','Status','Time_Submitted','Auto','Amended','Remarks']
         const rows: string[][] = []
 
         for (const date of dates) {
           const daySubs = subs.filter(s => s.submission_date === date)
+          const dow = dayOfWeek(date)
           for (const u of users) {
             const sub = daySubs.find(s => s.user_id === u.id)
             const grp = GROUPS.find(g => g.id === u.group_id)?.short ?? ''
@@ -232,6 +233,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
             if (sub) {
               rows.push([
                 date,
+                dow,
                 u.full_name,
                 u.personnel_type,
                 rankTitle,
@@ -244,7 +246,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
                 (sub.remarks ?? '').replace(/,/g,' ')
               ])
             } else {
-              rows.push([date, u.full_name, u.personnel_type, rankTitle, grp, u.appointment ?? '', 'Not Reported', '', 'No', 'No', ''])
+              rows.push([date, dow, u.full_name, u.personnel_type, rankTitle, grp, u.appointment ?? '', 'Not Reported', '', 'No', 'No', ''])
             }
           }
         }
@@ -255,7 +257,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
         const { data: activeUsers } = await supabase.from('users').select('id').eq('is_active',true).neq('role','admin')
         const totalStrength = activeUsers?.length ?? 0
 
-        const header = ['Date','Strength','Reported','Pending','Rate_%','Available','Attend_B','Attend_C','Local_Leave','Overseas_Leave','Time_Off','Duty_Course']
+        const header = ['Date','Day','Strength','Reported','Pending','Rate_%','Available','Attend_B','Attend_C','Local_Leave','Overseas_Leave','Time_Off','Duty_Course']
         const rows = dates.map(date => {
           const day = subs.filter(s => s.submission_date === date)
           const reported   = day.length
@@ -268,7 +270,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
           const timeOff    = day.filter(s => s.status === 'Time Off').length
           const duty       = day.filter(s => ['Duty','Course'].includes(s.status)).length
           const rate       = totalStrength ? Math.round(reported / totalStrength * 100) : 0
-          return [date, totalStrength, reported, pending, rate, available, attendB, attendC, localLeave, overseasLv, timeOff, duty]
+          return [date, dayOfWeek(date), totalStrength, reported, pending, rate, available, attendB, attendC, localLeave, overseasLv, timeOff, duty]
         })
         csv = [header, ...rows].map(r => r.join(',')).join('\n')
       }

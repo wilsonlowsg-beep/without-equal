@@ -216,6 +216,18 @@ export function medicalDurationLabel(endDate: string): string {
 
 export function formatDate(date: string): string {
   return new Date(date + 'T00:00:00').toLocaleDateString('en-SG', {
-    day: '2-digit', month: 'short', year: 'numeric'
+    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric'
   })
+}
+
+/** Short date with day of week — e.g. "Sat, 20 Jun" */
+export function formatDateShort(date: string): string {
+  return new Date(date + 'T00:00:00').toLocaleDateString('en-SG', {
+    weekday: 'short', day: '2-digit', month: 'short'
+  })
+}
+
+/** Three-letter day abbreviation for a YYYY-MM-DD string */
+export function dayOfWeek(date: string): string {
+  return new Date(date + 'T00:00:00').toLocaleDateString('en-SG', { weekday: 'short' })
 }

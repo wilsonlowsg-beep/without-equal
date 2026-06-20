@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User } from '@/types/database'
-import { statusColor, displayName, todayStr, GROUPS, MIL_RANKS, CIV_TITLES } from '@/lib/constants'
+import { statusColor, displayName, todayStr, GROUPS, MIL_RANKS, CIV_TITLES, dayOfWeek } from '@/lib/constants'
 
 // ── MY HISTORY ───────────────────────────────────────────────────────────────
 export function MyHistory({ user }: { user: User }) {
@@ -18,9 +18,10 @@ export function MyHistory({ user }: { user: User }) {
 
   const downloadCSV = () => {
     if (subs.length === 0) return
-    const header = ['Date','Status','Time_Submitted','Auto','Amended','Remarks']
+    const header = ['Date','Day','Status','Time_Submitted','Auto','Amended','Remarks']
     const rows = subs.map(s => [
       s.submission_date,
+      dayOfWeek(s.submission_date),
       s.status,
       new Date(s.submitted_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false}),
       s.is_auto ? 'Yes' : 'No',
@@ -55,7 +56,9 @@ export function MyHistory({ user }: { user: User }) {
           ? <div style={{fontSize:13,color:'var(--dim)'}}>No submissions yet.</div>
           : subs.map((s,i) => (
             <div className="we-row" key={i}>
-              <div style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--dim)',width:52,flexShrink:0}}>{s.submission_date.slice(5)}</div>
+              <div style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--dim)',width:72,flexShrink:0}}>
+                {dayOfWeek(s.submission_date)} {s.submission_date.slice(5)}
+              </div>
               <div style={{flex:1,fontSize:13,fontWeight:500,color:statusColor(s.status)}}>{s.status}</div>
               {s.is_auto    && <span className="badge-auto" style={{fontSize:9,padding:'2px 6px'}}>AUTO</span>}
               {s.is_amended && <span className="we-chip" style={{background:'var(--amber-bg)',color:'var(--amber)',border:'1px solid rgba(232,160,32,.2)',fontSize:9}}>AMENDED</span>}

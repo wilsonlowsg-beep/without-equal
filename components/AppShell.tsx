@@ -24,10 +24,11 @@ const ROLE_TABS: Record<string, {key:Tab;label:string}[]> = {
 function Clock() {
   const [now, setNow] = useState(new Date())
   useEffect(() => { const i = setInterval(()=>setNow(new Date()),1000); return()=>clearInterval(i) }, [])
-  const hh = String(now.getHours()).padStart(2,'0')
-  const mm = String(now.getMinutes()).padStart(2,'0')
-  const ss = String(now.getSeconds()).padStart(2,'0')
-  return <span className="we-clock">{hh}{mm}:{ss}H</span>
+  const hh  = String(now.getHours()).padStart(2,'0')
+  const mm  = String(now.getMinutes()).padStart(2,'0')
+  const ss  = String(now.getSeconds()).padStart(2,'0')
+  const day = now.toLocaleDateString('en-SG', { weekday: 'short' }).toUpperCase()
+  return <span className="we-clock">{day} · {hh}{mm}:{ss}H</span>
 }
 
 function Toast({ msg, onDone }: { msg: string; onDone: ()=>void }) {
