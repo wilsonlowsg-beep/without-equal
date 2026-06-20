@@ -48,17 +48,20 @@ export async function POST(req: NextRequest) {
         ? caller.group_id                            // always own group
         : (targetGroup != null ? targetGroup : null) // admin/ac3: null = all
 
-    // Fetch push subscriptions, filtered by group if needed
-    let subsQuery = db
-      .from('push_subscriptions')
-      .select('user_id, endpoint, p256dh, auth, users!inner(group_id, is_active)')
-      .eq('users.is_active', true)
-
+    // Get target user IDs first, then fetch their subscriptions
+    let usersQuery = db.from('users').select('id').eq('is_active', true)
     if (effectiveGroup != null) {
-      subsQuery = subsQuery.eq('users.group_id', effectiveGroup)
+      usersQuery = usersQuery.eq('group_id', effectiveGroup)
     }
+    const { data: targetUsers } = await usersQuery
+    const targetIds = (targetUsers ?? []).map((u: { id: string }) => u.id)
+    if (!targetIds.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no users in target' })
 
-    const { data: subs, error } = await subsQuery
+    const { data: subs, error } = await db
+      .from('push_subscriptions')
+      .select('user_id, endpoint, p256dh, auth')
+      .in('user_id', targetIds)
+
     if (error) {
       console.error('[push/send-now] subs query error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })

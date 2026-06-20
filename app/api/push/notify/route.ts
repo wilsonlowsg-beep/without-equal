@@ -33,7 +33,13 @@ export async function GET(req: NextRequest) {
 
   const pushMessage = s['push_message'] || '⏰ 0800H — Report your status for today.'
 
-  const { data: subs, error } = await db.from('push_subscriptions').select('user_id, endpoint, p256dh, auth')
+  const { data: activeUsers } = await db.from('users').select('id').eq('is_active', true)
+  const activeIds = (activeUsers ?? []).map((u: { id: string }) => u.id)
+
+  const { data: subs, error } = await db
+    .from('push_subscriptions')
+    .select('user_id, endpoint, p256dh, auth')
+    .in('user_id', activeIds)
   if (error || !subs?.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no subscriptions' })
 
   const { data: submitted } = await db.from('daily_submissions').select('user_id').eq('submission_date', today)
