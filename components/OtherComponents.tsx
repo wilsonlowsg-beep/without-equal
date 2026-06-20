@@ -12,27 +12,60 @@ export function MyHistory({ user }: { user: User }) {
 
   useEffect(() => {
     supabase.from('daily_submissions').select('*')
-      .eq('user_id', user.id).order('submission_date',{ascending:false}).limit(30)
+      .eq('user_id', user.id).order('submission_date',{ascending:false}).limit(90)
       .then(({data}) => setSubs(data??[]))
   }, [])
 
+  const downloadCSV = () => {
+    if (subs.length === 0) return
+    const header = ['Date','Status','Time_Submitted','Auto','Amended','Remarks']
+    const rows = subs.map(s => [
+      s.submission_date,
+      s.status,
+      new Date(s.submitted_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false}),
+      s.is_auto ? 'Yes' : 'No',
+      s.is_amended ? 'Yes' : 'No',
+      (s.remarks ?? '').replace(/,/g,' ')
+    ])
+    const csv = [header, ...rows].map(r => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `WE_History_${user.full_name.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
-    <div className="we-card">
-      <div className="we-clabel">Submission History</div>
-      {subs.length === 0
-        ? <div style={{fontSize:13,color:'var(--dim)'}}>No submissions yet.</div>
-        : subs.map((s,i) => (
-          <div className="we-row" key={i}>
-            <div style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--dim)',width:52,flexShrink:0}}>{s.submission_date.slice(5)}</div>
-            <div style={{flex:1,fontSize:13,fontWeight:500,color:statusColor(s.status)}}>{s.status}</div>
-            {s.is_auto    && <span className="badge-auto" style={{fontSize:9,padding:'2px 6px'}}>AUTO</span>}
-            {s.is_amended && <span className="we-chip" style={{background:'var(--amber-bg)',color:'var(--amber)',border:'1px solid rgba(232,160,32,.2)',fontSize:9}}>AMENDED</span>}
-            <div style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--dim)'}}>
-              {new Date(s.submitted_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H
+    <div>
+      <div className="we-card">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+          <div className="we-clabel" style={{marginBottom:0}}>Submission History</div>
+          {subs.length > 0 && (
+            <button
+              onClick={downloadCSV}
+              style={{fontSize:11,padding:'4px 10px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',cursor:'pointer',fontFamily:'var(--mono)'}}
+            >
+              ⬇ CSV
+            </button>
+          )}
+        </div>
+        {subs.length === 0
+          ? <div style={{fontSize:13,color:'var(--dim)'}}>No submissions yet.</div>
+          : subs.map((s,i) => (
+            <div className="we-row" key={i}>
+              <div style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--dim)',width:52,flexShrink:0}}>{s.submission_date.slice(5)}</div>
+              <div style={{flex:1,fontSize:13,fontWeight:500,color:statusColor(s.status)}}>{s.status}</div>
+              {s.is_auto    && <span className="badge-auto" style={{fontSize:9,padding:'2px 6px'}}>AUTO</span>}
+              {s.is_amended && <span className="we-chip" style={{background:'var(--amber-bg)',color:'var(--amber)',border:'1px solid rgba(232,160,32,.2)',fontSize:9}}>AMENDED</span>}
+              <div style={{fontFamily:'var(--mono)',fontSize:11,color:'var(--dim)'}}>
+                {new Date(s.submitted_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H
+              </div>
             </div>
-          </div>
-        ))
-      }
+          ))
+        }
+      </div>
     </div>
   )
 }

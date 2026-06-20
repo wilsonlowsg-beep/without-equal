@@ -18,6 +18,10 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
   const [aiLoading,setAiL]      = useState(false)
   const [aiShown,  setAiS]      = useState(false)
   const [loading,  setLoading]  = useState(true)
+  // Historical export state
+  const [histFrom, setHistFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate()-13); return d.toISOString().slice(0,10) })
+  const [histTo,   setHistTo]   = useState(() => new Date().toISOString().slice(0,10))
+  const [histLoading, setHistLoading] = useState(false)
   const supabase = createClient()
   const today    = todayStr()
   const tomorrow = tomorrowStr()
@@ -124,6 +128,59 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
       setAiText(d.content?.[0]?.text ?? 'Unable to generate.')
     } catch { setAiText('AI unavailable. Review data directly.') }
     setAiL(false)
+  }
+
+  const downloadHistoricalCSV = async () => {
+    if (histFrom > histTo) { showToast('Start date must be before end date'); return }
+    setHistLoading(true)
+    try {
+      // Build list of dates in range
+      const dates: string[] = []
+      const cur = new Date(histFrom)
+      const end = new Date(histTo)
+      while (cur <= end) { dates.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1) }
+
+      // Fetch total active personnel count (denominator)
+      const { data: activeUsers } = await supabase.from('users').select('id').eq('is_active',true).neq('role','admin')
+      const totalStrength = activeUsers?.length ?? 0
+
+      // Fetch all submissions in range in one query
+      const { data: allHistSubs } = await supabase
+        .from('daily_submissions')
+        .select('submission_date, status, user_id')
+        .gte('submission_date', histFrom)
+        .lte('submission_date', histTo)
+
+      const subs = allHistSubs ?? []
+
+      // Aggregate per date
+      const rows = dates.map(date => {
+        const day = subs.filter(s => s.submission_date === date)
+        const reported    = day.length
+        const pending     = totalStrength - reported
+        const available   = day.filter(s => ['Available','Work From Home'].includes(s.status)).length
+        const attendB     = day.filter(s => s.status === 'Attend B').length
+        const attendC     = day.filter(s => s.status === 'Attend C').length
+        const localLeave  = day.filter(s => s.status === 'Local Leave').length
+        const overseasLv  = day.filter(s => s.status === 'Overseas Leave').length
+        const timeOff     = day.filter(s => s.status === 'Time Off').length
+        const duty        = day.filter(s => ['Duty','Course'].includes(s.status)).length
+        const rate        = totalStrength ? Math.round(reported / totalStrength * 100) : 0
+        return [date, totalStrength, reported, pending, rate, available, attendB, attendC, localLeave, overseasLv, timeOff, duty]
+      })
+
+      const header = ['Date','Strength','Reported','Pending','Rate_%','Available','Attend_B','Attend_C','Local_Leave','Overseas_Leave','Time_Off','Duty_Course']
+      const csv = [header, ...rows].map(r => r.join(',')).join('\n')
+      const blob = new Blob([csv], { type: 'text/csv' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `WITHOUT_EQUAL_History_${histFrom}_to_${histTo}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Historical CSV downloaded ✓')
+    } catch { showToast('Export failed — try again') }
+    setHistLoading(false)
   }
 
   if (loading) return <div style={{padding:24,color:'var(--dim)',fontSize:13}}>Loading formation data…</div>
@@ -309,6 +366,48 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
         {!aiShown && <div><div style={{fontSize:13,color:'var(--dim)',marginBottom:12,lineHeight:1.5}}>Generate an AI-written command-level readiness summary.</div><button className="btn btn-primary" onClick={generateAI}>Generate Summary</button></div>}
         {aiLoading && <div className="we-ai-loading"><div className="we-ai-dot"/><div className="we-ai-dot"/><div className="we-ai-dot"/><span>Generating…</span></div>}
         {aiText && <div className="we-ai-text">{aiText}</div>}
+      </div>
+
+      {/* HISTORICAL EXPORT */}
+      <div className="we-card dark">
+        <div className="we-clabel cl-amber">📥 Historical Records Export</div>
+        <div style={{fontSize:12,color:'var(--dim)',marginBottom:12,lineHeight:1.5}}>
+          Download a CSV of daily formation statistics for any date range. Includes strength, reporting rate, availability breakdown, leave counts, and medical status.
+        </div>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:12}}>
+          <div style={{display:'flex',flexDirection:'column',gap:4,flex:1,minWidth:120}}>
+            <label style={{fontSize:10,color:'var(--dim)',fontFamily:'var(--mono)',letterSpacing:'0.05em'}}>FROM</label>
+            <input
+              type="date"
+              value={histFrom}
+              onChange={e=>setHistFrom(e.target.value)}
+              max={histTo}
+              style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:13,padding:'6px 10px',fontFamily:'var(--mono)',width:'100%'}}
+            />
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:4,flex:1,minWidth:120}}>
+            <label style={{fontSize:10,color:'var(--dim)',fontFamily:'var(--mono)',letterSpacing:'0.05em'}}>TO</label>
+            <input
+              type="date"
+              value={histTo}
+              onChange={e=>setHistTo(e.target.value)}
+              min={histFrom}
+              max={new Date().toISOString().slice(0,10)}
+              style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,color:'var(--text)',fontSize:13,padding:'6px 10px',fontFamily:'var(--mono)',width:'100%'}}
+            />
+          </div>
+        </div>
+        <button
+          className="btn btn-primary"
+          onClick={downloadHistoricalCSV}
+          disabled={histLoading}
+          style={{width:'100%'}}
+        >
+          {histLoading ? '⏳ Exporting…' : '⬇ Download CSV'}
+        </button>
+        <div style={{fontSize:10,color:'var(--faint)',marginTop:8,fontFamily:'var(--mono)'}}>
+          RESTRICTED · Formation use only · Do not share externally
+        </div>
       </div>
     </div>
   )
