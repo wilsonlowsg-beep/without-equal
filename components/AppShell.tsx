@@ -11,12 +11,13 @@ import FormationDashboard from './FormationDashboard'
 import TrendsView from './TrendsView'
 import AdminDashboard from './AdminDashboard'
 import LeaveManager from './LeaveManager'
+import GroupManage from './GroupManage'
 
-type Tab = 'status' | 'history' | 'leave' | 'group' | 'formation' | 'trends' | 'admin'
+type Tab = 'status' | 'history' | 'leave' | 'group' | 'formation' | 'trends' | 'admin' | 'manage'
 
 const ROLE_TABS: Record<string, {key:Tab;label:string}[]> = {
   personnel: [{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
-  grouphead: [{key:'group',label:'My Group'},{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
+  grouphead: [{key:'group',label:'My Group'},{key:'manage',label:'Manage'},{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
   ac3:       [{key:'formation',label:'Formation'},{key:'trends',label:'Trends'},{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
   admin:     [{key:'admin',label:'Admin'},{key:'formation',label:'Dashboard'},{key:'status',label:'My Status'},{key:'leave',label:'My Leave'},{key:'history',label:'History'}],
 }
@@ -288,6 +289,7 @@ export default function AppShell({ user, onLogout }: { user: User; onLogout: ()=
       case 'history':   return <MyHistory      user={user} />
       case 'leave':     return <LeaveManager   user={user} showToast={showToast} />
       case 'group':     return <GroupDashboard user={user} showToast={showToast} />
+      case 'manage':    return <GroupManage    user={user} showToast={showToast} />
       case 'formation': return <FormationDashboard user={user} showToast={showToast} />
       case 'trends':    return <TrendsView />
       case 'admin':     return <AdminDashboard showToast={showToast} />
@@ -310,12 +312,14 @@ export default function AppShell({ user, onLogout }: { user: User; onLogout: ()=
 
       {/* NAV */}
       <nav className="we-nav">
-        {tabs.map(t => (
-          <button key={t.key} className={`we-navbtn${activeTab===t.key?' active':''}`} onClick={()=>setTab(t.key)}>
-            {t.label}
-          </button>
-        ))}
-        <button className="we-navbtn" onClick={handleLogout} style={{flex:'0 0 auto',paddingLeft:14,paddingRight:14}}>
+        <div className="we-nav-tabs">
+          {tabs.map(t => (
+            <button key={t.key} className={`we-navbtn${activeTab===t.key?' active':''}`} onClick={()=>setTab(t.key)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <button className="we-navbtn we-signout" onClick={handleLogout}>
           Sign Out
         </button>
       </nav>
