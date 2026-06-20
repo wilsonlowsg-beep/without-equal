@@ -142,7 +142,7 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
   const reportText = [
     'WITHOUT EQUAL',
     `${grpName} Group Daily Status`,
-    `${new Date(today + 'T00:00:00').toLocaleDateString('en-SG', { weekday: 'short' })}, ${today} · 0830H`,
+    `${new Date(today + 'T00:00:00').toLocaleDateString('en-SG', { weekday: 'short' })}, ${today.slice(8)}-${today.slice(5,7)}-${today.slice(2,4)} · 0830H`,
     '─────────────────────────',
     `Strength        : ${strength}`,
     `Reported        : ${reported}`,
@@ -190,9 +190,9 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
         >
           📸 0830 Snapshot{!snapshot ? ' (pending)' : ''}
         </button>
-        {snapshot && (
+        {snapshot && snapView === 'live' && (
           <span style={{fontSize:10,color:'var(--dim)',fontFamily:'var(--mono)'}}>
-            {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H
+            CAA {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H
           </span>
         )}
       </div>
@@ -204,9 +204,9 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
             <div style={{display:'flex',alignItems:'center',gap:8}}>
               <div style={{fontSize:18}}>📸</div>
               <div>
-                <div style={{fontSize:12,fontWeight:700,color:'var(--amber)'}}>0830 Snapshot · {grpName} · {today}</div>
+                <div style={{fontSize:12,fontWeight:700,color:'var(--amber)'}}>0830 Snapshot · {grpName} · {today.slice(8)}-{today.slice(5,7)}-{today.slice(2,4)}</div>
                 <div style={{fontSize:10,color:'var(--dim)',marginTop:2}}>
-                  Captured at {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H — reflects group state at that moment
+                  CAA {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H — reflects group state at that moment
                 </div>
               </div>
             </div>
