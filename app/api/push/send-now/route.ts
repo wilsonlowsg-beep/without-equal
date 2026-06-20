@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
     }
     const { data: targetUsers } = await usersQuery
     const targetIds = (targetUsers ?? []).map((u: { id: string }) => u.id)
+    console.log(`[push/send-now] targetIds=${JSON.stringify(targetIds)}`)
     if (!targetIds.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no users in target' })
 
     const { data: subs, error } = await db
@@ -62,11 +63,9 @@ export async function POST(req: NextRequest) {
       .select('user_id, endpoint, p256dh, auth')
       .in('user_id', targetIds)
 
-    if (error) {
-      console.error('[push/send-now] subs query error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-    if (!subs?.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no subscriptions' })
+    console.log(`[push/send-now] subs found=${subs?.length ?? 0} error=${JSON.stringify(error)}`)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!subs?.length) return NextResponse.json({ ok: true, sent: 0, reason: 'no subscriptions — no one has enabled push notifications yet' })
 
     // If pendingOnly, exclude users who already submitted today
     let targetSubs = subs
@@ -97,16 +96,16 @@ export async function POST(req: NextRequest) {
       )
     )
 
-    const sent   = results.filter(r => r.status === 'fulfilled').length
-    const failed = results.filter(r => r.status === 'rejected').length
+    const sent    = results.filter(r => r.status === 'fulfilled').length
+    const failed  = results.filter(r => r.status === 'rejected').length
+    const errors  = results.filter(r => r.status === 'rejected').map(r => (r as any).reason?.message)
     const groupLabel = effectiveGroup != null ? `group ${effectiveGroup}` : 'all groups'
-    console.log(`[push/send-now] ${groupLabel} sent=${sent} failed=${failed} msg="${message}"`)
+    console.log(`[push/send-now] ${groupLabel} sent=${sent} failed=${failed} errors=${JSON.stringify(errors)}`)
 
-    // Update last sent timestamp
     await db.from('system_settings')
       .upsert({ key: 'push_last_sent', value: new Date().toISOString(), updated_at: new Date().toISOString() })
 
-    return NextResponse.json({ ok: true, sent, failed })
+    return NextResponse.json({ ok: true, sent, failed, errors })
   } catch (err) {
     console.error('[push/send-now] Error:', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

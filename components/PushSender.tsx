@@ -60,9 +60,17 @@ export default function PushSender({ userId, role, myGroupId, showToast, onSent 
         const label = targetGroup === 'all'
           ? 'all users'
           : GROUPS.find(g => g.id === targetGroup)?.name ?? `Group ${targetGroup}`
-        showToast(`Sent to ${json.sent} device${json.sent === 1 ? '' : 's'} in ${label} ✓`)
-        setMessage(''); setTitle('')
-        onSent?.({ sent: json.sent, failed: json.failed })
+        if (json.sent > 0) {
+          showToast(`Sent to ${json.sent} device${json.sent === 1 ? '' : 's'} in ${label} ✓`)
+          setMessage(''); setTitle('')
+        } else if (json.reason) {
+          showToast(`⚠️ ${json.reason}`)
+        } else if (json.failed > 0) {
+          showToast(`⚠️ ${json.failed} send${json.failed === 1 ? '' : 's'} failed — ${json.errors?.[0] ?? 'check Vercel logs'}`)
+        } else {
+          showToast('⚠️ 0 devices — no push subscriptions found')
+        }
+        onSent?.({ sent: json.sent, failed: json.failed ?? 0 })
       } else {
         showToast('Error: ' + (json.error ?? 'Unknown'))
       }
