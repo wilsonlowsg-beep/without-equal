@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod, GroupReview } from '@/types/database'
-import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel, LEAVE_STATUSES, WEEKEND_STATUS, isWeekend } from '@/lib/constants'
+import { displayName, lastName, statusColor, todayStr, tomorrowStr, formatDate, AVAILABLE_STATUSES, medicalDurationLabel, LEAVE_STATUSES, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown } from '@/lib/constants'
 
 interface PersonnelRow {
   user: User
@@ -64,13 +64,14 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
 
   if (loading) return <div style={{padding:24,color:'var(--dim)',fontSize:13}}>Loading…</div>
 
-  const weekend       = isWeekend()
-  // On weekends, weekday-schedule staff are excluded from strength/pending (they're auto-marked Weekend)
-  const activeRows    = weekend ? rows.filter(r => (r.user as any).work_schedule === 'shift' || (r.sub && r.sub.status !== WEEKEND_STATUS)) : rows
-  const strength      = weekend ? rows.filter(r => (r.user as any).work_schedule === 'shift').length : rows.length
-  const reported      = weekend ? activeRows.filter(r => r.sub && r.sub.status !== WEEKEND_STATUS).length : rows.filter(r => r.sub !== null).length
+  const standDown     = isStandDown()
+  // On stand-down days (weekends/PH), weekday staff are excluded from strength/pending
+  const activeRows    = standDown ? rows.filter(r => (r.user as any).work_schedule === 'shift' || (r.sub && !STANDDOWN_STATUSES.includes(r.sub.status))) : rows
+  const strength      = standDown ? rows.filter(r => (r.user as any).work_schedule === 'shift').length : rows.length
+  const reported      = standDown ? activeRows.filter(r => r.sub && !STANDDOWN_STATUSES.includes(r.sub.status)).length : rows.filter(r => r.sub !== null).length
   const pending       = strength - reported
-  const weekendCount  = rows.filter(r => r.sub?.status === WEEKEND_STATUS).length
+  const standDownCount = rows.filter(r => r.sub && STANDDOWN_STATUSES.includes(r.sub.status) && r.sub.status !== MALAYSIA_STATUS).length
+  const malaysiaRows   = rows.filter(r => r.sub?.status === MALAYSIA_STATUS)
   const available     = rows.filter(r => r.sub && AVAILABLE_STATUSES.includes(r.sub.status)).length
   const attendB       = rows.filter(r => r.sub?.status === 'Attend B').length
   const attendC       = rows.filter(r => r.sub?.status === 'Attend C').length
@@ -79,7 +80,10 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
   const timeOff       = rows.filter(r => r.sub?.status === 'Time Off').length
   const duty          = rows.filter(r => r.sub && ['Duty','Course','Exercise','Official Travel'].includes(r.sub.status)).length
   const rate          = strength ? Math.round(reported/strength*100) : 0
-  const notReported   = rows.filter(r => !r.sub)
+  // On stand-down days only shift staff are truly "pending"
+  const notReported   = standDown
+    ? rows.filter(r => !r.sub && (r.user as any).work_schedule === 'shift')
+    : rows.filter(r => !r.sub)
   const attendCRows   = rows.filter(r => r.sub?.status === 'Attend C')
   const attendBRows   = rows.filter(r => r.sub?.status === 'Attend B')
   const overseasRows  = rows.filter(r => r.sub?.status === 'Overseas Leave')
@@ -118,10 +122,14 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
           <div className="we-stat"><div className={`we-statval ${overseasLeave>0?'sv-purple':'sv-dim'}`} style={{fontSize:18}}>{overseasLeave}</div><div className="we-statlbl">Overseas</div></div>
           <div className="we-stat"><div className={`we-statval ${timeOff>0?'sv-amber':'sv-dim'}`} style={{fontSize:18}}>{timeOff}</div><div className="we-statlbl">Time Off</div></div>
         </div>
-        {weekendCount > 0 && (
-          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)',display:'flex',alignItems:'center',gap:8}}>
-            <span style={{fontSize:10,color:'var(--dim)',fontFamily:'var(--mono)'}}>🏖️ WEEKEND STAND-DOWN</span>
-            <span style={{fontSize:13,fontWeight:700,color:'var(--dim)'}}>{weekendCount}</span>
+        {(standDownCount > 0 || malaysiaRows.length > 0) && (
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+            {standDownCount > 0 && (
+              <span style={{fontSize:11,color:'var(--dim)'}}>🏖️ Stand-down: <strong>{standDownCount}</strong></span>
+            )}
+            {malaysiaRows.length > 0 && (
+              <span style={{fontSize:11,color:'var(--teal,#0891B2)'}}>🇲🇾 Malaysia: <strong>{malaysiaRows.length}</strong></span>
+            )}
           </div>
         )}
       </div>
@@ -226,6 +234,20 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* MALAYSIA */}
+      {malaysiaRows.length > 0 && (
+        <div className="we-card" style={{border:'1px solid rgba(8,145,178,0.25)',background:'rgba(8,145,178,0.04)'}}>
+          <div className="we-clabel" style={{color:'var(--teal,#0891B2)'}}>🇲🇾 In Malaysia (Informed)</div>
+          {malaysiaRows.map(r => (
+            <div className="we-row" key={r.user.id}>
+              <div style={{fontSize:18,flexShrink:0}}>🇲🇾</div>
+              <div style={{flex:1,fontSize:13}}>{displayName(r.user)}</div>
+              <span style={{fontSize:10,color:'var(--dim)'}}>No leave reqd</span>
+            </div>
+          ))}
         </div>
       )}
 

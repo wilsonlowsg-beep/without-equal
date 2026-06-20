@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { GroupStats, User, LeavePeriod } from '@/types/database'
-import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel, WEEKEND_STATUS, isWeekend } from '@/lib/constants'
+import { displayName, GROUPS, todayStr, tomorrowStr, formatDate, statusColor, AVAILABLE_STATUSES, SHIFT_STATUSES, LEAVE_STATUSES, medicalDurationLabel, WEEKEND_STATUS, PUBLIC_HOLIDAY_STATUS, MALAYSIA_STATUS, STANDDOWN_STATUSES, isStandDown } from '@/lib/constants'
 
 export default function FormationDashboard({ showToast }: { showToast: (m:string)=>void }) {
   const [stats,    setStats]    = useState<GroupStats[]>([])
@@ -78,9 +78,13 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
   const nightShift   = allSubs.filter(s=>s.status==='Night Shift').length
   const restDay      = allSubs.filter(s=>s.status==='Rest Day').length
   const totalShift   = dayShift + nightShift + restDay
-  // Weekend stand-down count
-  const weekendCount = allSubs.filter(s=>s.status===WEEKEND_STATUS).length
-  const isWknd       = isWeekend()
+  // Stand-down counts (weekends + public holidays)
+  const weekendCount  = allSubs.filter(s=>s.status===WEEKEND_STATUS).length
+  const phCount       = allSubs.filter(s=>s.status===PUBLIC_HOLIDAY_STATUS).length
+  const malaysiaCount = allSubs.filter(s=>s.status===MALAYSIA_STATUS).length
+  const standDownTotal = weekendCount + phCount
+  const isStanddown   = isStandDown()
+  const malaysiaUsers = allSubs.filter(s=>s.status===MALAYSIA_STATUS).map(s=>allUsers.find(u=>u.id===s.user_id)).filter(Boolean) as User[]
 
   // Filter
   let filtered = allUsers
@@ -102,6 +106,8 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
     `Local Leave     : ${localLv}`,`Overseas Leave  : ${overseasLv}`,`Time Off        : ${timeOff}`,`Duty / Course   : ${duty}`,
     ...(totalShift>0?[`Day Shift       : ${dayShift}`,`Night Shift     : ${nightShift}`,`Rest Day        : ${restDay}`]:[]),
     ...(weekendCount>0?[`Weekend Stand-dn: ${weekendCount}`]:[]),
+    ...(phCount>0?[`Public Holiday  : ${phCount}`]:[]),
+    ...(malaysiaCount>0?[`Malaysia (Infmd): ${malaysiaCount}`]:[]),
     '─────────────────────────',
     ...(overseas.length>0?['Overseas Personnel:',...overseas.map(o=>{
       const cover = (o.leave as any).covering_person ? ` / Covered by: ${displayName((o.leave as any).covering_person)}` : ''
@@ -120,7 +126,8 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
       const med = s.medical_end_date ? ` [MC until ${s.medical_end_date}]` : ''
       return `  ⚠ [RED] Attend C: ${u?displayName(u):'Unknown'}${med}`
     }) : []),
-    ...(attC===0&&notContac.length===0&&pending===0&&unreviewed.length===0?['  ✓ Nil. Formation fully reported and reviewed.']:[]),
+    ...(malaysiaCount>0?[`  ℹ ${malaysiaCount} in Malaysia (no leave reqd): ${malaysiaUsers.map(u=>displayName(u)).join(', ')}`]:[]),
+    ...(attC===0&&notContac.length===0&&pending===0&&unreviewed.length===0&&malaysiaCount===0?['  ✓ Nil. Formation fully reported and reviewed.']:[]),
     '─────────────────────────','WITHOUT EQUAL',
   ].join('\n')
 
@@ -284,10 +291,11 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
           <div className="we-stat"><div className={`we-statval ${overseasLv>0?'sv-purple':'sv-dim'}`} style={{fontSize:18}}>{overseasLv}</div><div className="we-statlbl">Overseas</div></div>
           <div className="we-stat"><div className={`we-statval ${timeOff>0?'sv-amber':'sv-dim'}`} style={{fontSize:18}}>{timeOff}</div><div className="we-statlbl">Time Off</div></div>
         </div>
-        {weekendCount > 0 && (
-          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)',display:'flex',alignItems:'center',gap:8}}>
-            <span style={{fontSize:10,color:'var(--dim)',fontFamily:'var(--mono)'}}>🏖️ WEEKEND STAND-DOWN</span>
-            <span style={{fontSize:15,fontWeight:700,color:'var(--dim)'}}>{weekendCount}</span>
+        {(standDownTotal > 0 || malaysiaCount > 0) && (
+          <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)',display:'flex',flexWrap:'wrap',gap:12,alignItems:'center'}}>
+            {weekendCount > 0 && <span style={{fontSize:11,color:'var(--dim)'}}>🏖️ Weekend: <strong>{weekendCount}</strong></span>}
+            {phCount > 0      && <span style={{fontSize:11,color:'var(--green)'}}>🎉 Public Holiday: <strong>{phCount}</strong></span>}
+            {malaysiaCount > 0 && <span style={{fontSize:11,color:'var(--teal,#0891B2)'}}>🇲🇾 Malaysia: <strong>{malaysiaCount}</strong></span>}
           </div>
         )}
         {totalShift > 0 && (
@@ -372,6 +380,22 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
         </div>
       )}
 
+      {/* MALAYSIA */}
+      {malaysiaUsers.length > 0 && (
+        <div className="we-card" style={{border:'1px solid rgba(8,145,178,0.25)',background:'rgba(8,145,178,0.04)'}}>
+          <div className="we-clabel" style={{color:'var(--teal,#0891B2)'}}>🇲🇾 In Malaysia (Informed) — No Leave Required</div>
+          {malaysiaUsers.map(u => (
+            <div className="we-row" key={u.id}>
+              <div style={{fontSize:18,flexShrink:0}}>🇲🇾</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:500}}>{displayName(u)}</div>
+                <div style={{fontSize:10,color:'var(--dim)'}}>Weekend/PH trip · Commander informed</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* RETURNING TOMORROW */}
       {retTomorrow.length > 0 && (
         <div className="we-card amber">
@@ -415,6 +439,12 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
         {retTomorrow.length > 0 && <div className="we-alert"><div className="we-alert-dot" style={{background:'var(--amber)'}}/><div><div className="we-alert-text"><strong>{retTomorrow.length} personnel</strong> returning from leave tomorrow</div><div className="we-alert-sub">Ensure status submitted on return day</div></div></div>}
         {unreviewed.length > 0 && <div className="we-alert"><div className="we-alert-dot" style={{background:'var(--amber)'}}/><div><div className="we-alert-text"><strong>Groups pending review:</strong> {unreviewed.map(g=>g.group_name).join(', ')}</div></div></div>}
         {rate < 80 && <div className="we-alert"><div className="we-alert-dot" style={{background:'var(--amber)'}}/><div><div className="we-alert-text">Reporting rate below 80%</div><div className="we-alert-sub">Current: {rate}%</div></div></div>}
+        {malaysiaCount > 0 && (
+          <div className="we-alert"><div className="we-alert-dot" style={{background:'var(--teal,#0891B2)'}}/><div>
+            <div className="we-alert-text" style={{color:'var(--teal,#0891B2)'}}>🇲🇾 {malaysiaCount} in Malaysia (no leave reqd)</div>
+            <div className="we-alert-sub">{malaysiaUsers.map(u=>displayName(u)).join(' · ')}</div>
+          </div></div>
+        )}
         {attC===0&&notContac.length===0&&pending===0&&unreviewed.length===0&&rate>=80 && (
           <div className="we-alert"><div className="we-alert-dot" style={{background:'var(--green)'}}/><div><div className="we-alert-text" style={{color:'var(--green)'}}>Formation fully reported and reviewed</div></div></div>
         )}

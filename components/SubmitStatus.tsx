@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User, DailySubmission, LeavePeriod } from '@/types/database'
-import { STATUS_CATS, statusColor, todayStr, tomorrowStr, isPastCutoff, LEAVE_STATUSES, formatDate, PRE_REPORT_HOUR, MEDICAL_STATUSES, WEEKEND_STATUS, isWeekend } from '@/lib/constants'
+import { STATUS_CATS, statusColor, todayStr, tomorrowStr, isPastCutoff, LEAVE_STATUSES, formatDate, PRE_REPORT_HOUR, MEDICAL_STATUSES, WEEKEND_STATUS, PUBLIC_HOLIDAY_STATUS, MALAYSIA_STATUS, STANDDOWN_STATUSES, isWeekend, isStandDown, standDownLabel } from '@/lib/constants'
 
 export default function SubmitStatus({ user, showToast }: { user: User; showToast: (m:string)=>void }) {
   const [todaySub,    setTodaySub]  = useState<DailySubmission|null>(null)
@@ -68,12 +68,14 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
     setTomSub(tomSub)
     if (sub) { setSelected(sub.status); setRemarks(sub.remarks ?? ''); setMedEnd(sub.medical_end_date ?? ''); setCoverP(sub.covering_person_id ?? '') }
 
-    // Auto-mark weekday staff as Weekend on Sat/Sun
-    if (!sub && isWeekend() && user.work_schedule === 'weekdays') {
+    // Auto-mark weekday staff as Weekend/Public Holiday on stand-down days
+    if (!sub && isStandDown() && user.work_schedule === 'weekdays') {
+      const standStatus  = isWeekend() ? WEEKEND_STATUS : PUBLIC_HOLIDAY_STATUS
+      const standReason  = isWeekend() ? 'Auto: weekday schedule — weekend' : 'Auto: weekday schedule — public holiday'
       const { data: wkSub } = await supabase.from('daily_submissions').upsert({
         user_id: user.id, submission_date: todayStr(),
-        status: WEEKEND_STATUS, submitted_at: new Date().toISOString(),
-        is_auto: true, auto_reason: 'Auto: weekday schedule — weekend',
+        status: standStatus, submitted_at: new Date().toISOString(),
+        is_auto: true, auto_reason: standReason,
         is_amended: false,
       }, { onConflict: 'user_id,submission_date' }).select().single()
       if (wkSub) setTodaySub(wkSub)
@@ -146,20 +148,42 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
 
   if (loading) return <div style={{padding:24,color:'var(--dim)',fontSize:13}}>Loading…</div>
 
-  // ── WEEKEND — WEEKDAY STAFF ──────────────────────────────
-  if (isWeekend() && user.work_schedule === 'weekdays' && !weekendOverride) {
-    const dayName = new Date().getDay() === 6 ? 'Saturday' : 'Sunday'
-    const isAlreadyOverridden = todaySub && todaySub.status !== WEEKEND_STATUS
+  // ── STAND-DOWN — WEEKDAY STAFF (weekends + public holidays) ─────────
+  if (isStandDown() && user.work_schedule === 'weekdays' && !weekendOverride) {
+    const label     = standDownLabel()
+    const isPH      = label === 'Public Holiday'
+    const isMalaysia       = todaySub?.status === MALAYSIA_STATUS
+    const isAlreadyWorking = todaySub && !STANDDOWN_STATUSES.includes(todaySub.status)
+
+    const submitMalaysia = async () => {
+      setSaving(true)
+      const { data, error } = await supabase.from('daily_submissions').upsert({
+        user_id: user.id, submission_date: today,
+        status: MALAYSIA_STATUS,
+        submitted_at: new Date().toISOString(),
+        is_auto: false, is_amended: false,
+      }, { onConflict: 'user_id,submission_date' }).select().single()
+      if (!error) { setTodaySub(data); showToast('🇲🇾 Commander informed ✓') }
+      setSaving(false)
+    }
+
     return (
       <div>
         <div className="we-card green" style={{textAlign:'center',padding:'24px 20px'}}>
-          <div style={{fontSize:28,marginBottom:12}}>🏖️</div>
-          <div style={{fontSize:16,fontWeight:700,color:'var(--green)',marginBottom:6}}>{dayName} — Stand Down</div>
+          <div style={{fontSize:28,marginBottom:12}}>{isPH ? '🎉' : '🏖️'}</div>
+          <div style={{fontSize:16,fontWeight:700,color:'var(--green)',marginBottom:6}}>{label} — Stand Down</div>
           <div style={{fontSize:13,color:'var(--dim)',lineHeight:1.6}}>
             No reporting required today.<br/>Your status has been auto-marked.
           </div>
         </div>
-        {isAlreadyOverridden ? (
+
+        {isMalaysia ? (
+          <div className="we-card" style={{border:'1px solid rgba(8,145,178,0.3)',background:'rgba(8,145,178,0.06)',textAlign:'center',padding:'20px 16px'}}>
+            <div style={{fontSize:28,marginBottom:8}}>🇲🇾</div>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--teal,#0891B2)'}}>In Malaysia — Commander Informed</div>
+            <div style={{fontSize:11,color:'var(--dim)',marginTop:4}}>No leave application required. Have a good trip!</div>
+          </div>
+        ) : isAlreadyWorking ? (
           <div className="we-card green">
             <div className="we-clabel cl-green">Status Submitted</div>
             <div className="we-row">
@@ -171,12 +195,28 @@ export default function SubmitStatus({ user, showToast }: { user: User; showToas
             </div>
           </div>
         ) : (
-          <div style={{textAlign:'center',paddingTop:4}}>
+          <div style={{display:'flex',flexDirection:'column',gap:10,paddingTop:4}}>
+            <button
+              onClick={submitMalaysia}
+              disabled={saving}
+              style={{
+                display:'flex',flexDirection:'column',alignItems:'center',
+                padding:'14px 20px', borderRadius:10, cursor:'pointer',
+                border:'1.5px solid rgba(8,145,178,0.35)',
+                background:'rgba(8,145,178,0.07)',
+                color:'var(--teal,#0891B2)',
+                fontFamily:'var(--sans)', textAlign:'center',
+              }}
+            >
+              <div style={{fontSize:22,marginBottom:4}}>🇲🇾</div>
+              <div style={{fontSize:13,fontWeight:600}}>I'm in Malaysia today</div>
+              <div style={{fontSize:10,color:'var(--dim)',marginTop:3}}>No leave needed — tap to inform your commander</div>
+            </button>
             <button
               onClick={() => setWkdOvr(true)}
               style={{fontSize:12,color:'var(--dim)',background:'none',border:'1px solid var(--border)',borderRadius:8,padding:'8px 20px',cursor:'pointer',fontFamily:'var(--sans)'}}
             >
-              I'm working today — submit my status
+              💼 I'm working today — submit my status
             </button>
           </div>
         )}

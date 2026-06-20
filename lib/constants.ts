@@ -76,6 +76,9 @@ export const SHIFT_STATUSES     = ['Day Shift', 'Night Shift', 'Rest Day']
 export const PRE_REPORT_HOUR = 18
 
 export function statusColor(status: string): string {
+  if (status === MALAYSIA_STATUS)        return C.teal
+  if (status === PUBLIC_HOLIDAY_STATUS)  return C.green
+  if (status === WEEKEND_STATUS)         return C.green
   for (const cat of STATUS_CATS) {
     if (cat.items.includes(status)) return cat.color
   }
@@ -136,12 +139,63 @@ export function isDateInRange(date: string, start: string, end: string): boolean
   return date >= start && date <= end
 }
 
-export const MEDICAL_STATUSES  = ['Attend B', 'Attend C']
-export const WEEKEND_STATUS    = 'Weekend'
+export const MEDICAL_STATUSES       = ['Attend B', 'Attend C']
+export const WEEKEND_STATUS         = 'Weekend'
+export const PUBLIC_HOLIDAY_STATUS  = 'Public Holiday'
+export const MALAYSIA_STATUS        = 'Malaysia Trip'
+// All auto stand-down statuses (weekday staff exempt from reporting)
+export const STANDDOWN_STATUSES     = [WEEKEND_STATUS, PUBLIC_HOLIDAY_STATUS, MALAYSIA_STATUS]
 
 export function isWeekend(date = new Date()): boolean {
   const day = date.getDay()
   return day === 0 || day === 6
+}
+
+// Singapore public holidays — update annually (mom.gov.sg)
+export const SG_PUBLIC_HOLIDAYS: string[] = [
+  // 2026
+  '2026-01-01', // New Year's Day
+  '2026-02-17', // CNY Day 1
+  '2026-02-18', // CNY Day 2
+  '2026-03-20', // Hari Raya Puasa (tentative)
+  '2026-04-03', // Good Friday
+  '2026-05-01', // Labour Day
+  '2026-05-25', // Vesak Day (tentative)
+  '2026-05-27', // Hari Raya Haji (tentative)
+  '2026-08-09', // National Day (Sun — in-lieu Mon 10 Aug)
+  '2026-08-10', // National Day in-lieu
+  '2026-11-02', // Deepavali (tentative)
+  '2026-12-25', // Christmas Day
+  // 2027
+  '2027-01-01', // New Year's Day (Fri)
+  '2027-01-27', // CNY Day 1 (Wed — Year of Goat)
+  '2027-01-28', // CNY Day 2 (Thu)
+  '2027-03-09', // Hari Raya Puasa (tentative)
+  '2027-03-26', // Good Friday (Easter Sun = 28 Mar)
+  '2027-05-01', // Labour Day (Sat — in-lieu Mon 3 May)
+  '2027-05-03', // Labour Day in-lieu
+  '2027-05-10', // Vesak Day (tentative)
+  '2027-05-17', // Hari Raya Haji (tentative)
+  '2027-08-09', // National Day (Mon)
+  '2027-10-29', // Deepavali (tentative)
+  '2027-12-25', // Christmas Day (Sat — in-lieu Mon 27 Dec)
+  '2027-12-27', // Christmas in-lieu
+]
+
+export function isPublicHoliday(date = new Date()): boolean {
+  return SG_PUBLIC_HOLIDAYS.includes(date.toISOString().slice(0, 10))
+}
+
+/** Stand-down = weekend OR public holiday (for weekday-schedule staff only) */
+export function isStandDown(date = new Date()): boolean {
+  return isWeekend(date) || isPublicHoliday(date)
+}
+
+/** Human-readable label for the stand-down reason */
+export function standDownLabel(date = new Date()): string {
+  if (isPublicHoliday(date)) return 'Public Holiday'
+  const day = date.getDay()
+  return day === 6 ? 'Saturday' : 'Sunday'
 }
 
 /** Returns days remaining until medical_end_date (0 = today, negative = expired) */
