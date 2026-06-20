@@ -295,7 +295,9 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
       <div style={{textAlign:'center',padding:'10px 0 14px',borderBottom:'1px solid var(--border)',marginBottom:12}}>
         <div style={{fontFamily:'var(--mono)',fontSize:9,letterSpacing:'0.2em',color:'var(--faint)',textTransform:'uppercase'}}>RESTRICTED · Formation Use Only</div>
         <div style={{fontSize:13,fontWeight:700,letterSpacing:'0.1em',color:'var(--amber)',marginTop:4}}>WITHOUT EQUAL · DAILY READINESS PICTURE</div>
-        <div style={{fontSize:11,color:'var(--dim)',marginTop:3,fontFamily:'var(--mono)'}}>{today}</div>
+        <div style={{fontSize:11,color:'var(--dim)',marginTop:4,fontFamily:'var(--mono)',letterSpacing:'0.05em'}}>
+          {dayOfWeek(today).toUpperCase()}, {today.slice(8)}-{today.slice(5,7)}-{today.slice(2,4)}
+        </div>
       </div>
 
       {/* LIVE / SNAPSHOT TOGGLE */}
@@ -312,7 +314,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
         </button>
         {snapshot && (
           <span style={{fontSize:10,color:'var(--dim)',alignSelf:'center',fontFamily:'var(--mono)',marginLeft:2}}>
-            {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H
+            CAA {new Date(snapshot.captured_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false})}H
           </span>
         )}
       </div>
