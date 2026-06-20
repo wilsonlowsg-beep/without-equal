@@ -22,6 +22,7 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
   const [histFrom, setHistFrom] = useState(() => { const d = new Date(); d.setDate(d.getDate()-13); return d.toISOString().slice(0,10) })
   const [histTo,   setHistTo]   = useState(() => new Date().toISOString().slice(0,10))
   const [histLoading, setHistLoading] = useState(false)
+  const [histMode, setHistMode] = useState<'summary'|'detailed'>('summary')
   const supabase = createClient()
   const today    = todayStr()
   const tomorrow = tomorrowStr()
@@ -140,45 +141,87 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
       const end = new Date(histTo)
       while (cur <= end) { dates.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1) }
 
-      // Fetch total active personnel count (denominator)
-      const { data: activeUsers } = await supabase.from('users').select('id').eq('is_active',true).neq('role','admin')
-      const totalStrength = activeUsers?.length ?? 0
-
-      // Fetch all submissions in range in one query
+      // Fetch all submissions in range with user details
       const { data: allHistSubs } = await supabase
         .from('daily_submissions')
-        .select('submission_date, status, user_id')
+        .select('submission_date, status, user_id, is_auto, is_amended, submitted_at, remarks, user:users(full_name, rank, title, personnel_type, group_id, appointment)')
         .gte('submission_date', histFrom)
         .lte('submission_date', histTo)
+        .order('submission_date', { ascending: true })
 
       const subs = allHistSubs ?? []
 
-      // Aggregate per date
-      const rows = dates.map(date => {
-        const day = subs.filter(s => s.submission_date === date)
-        const reported    = day.length
-        const pending     = totalStrength - reported
-        const available   = day.filter(s => ['Available','Work From Home'].includes(s.status)).length
-        const attendB     = day.filter(s => s.status === 'Attend B').length
-        const attendC     = day.filter(s => s.status === 'Attend C').length
-        const localLeave  = day.filter(s => s.status === 'Local Leave').length
-        const overseasLv  = day.filter(s => s.status === 'Overseas Leave').length
-        const timeOff     = day.filter(s => s.status === 'Time Off').length
-        const duty        = day.filter(s => ['Duty','Course'].includes(s.status)).length
-        const rate        = totalStrength ? Math.round(reported / totalStrength * 100) : 0
-        return [date, totalStrength, reported, pending, rate, available, attendB, attendC, localLeave, overseasLv, timeOff, duty]
-      })
+      let csv = ''
 
-      const header = ['Date','Strength','Reported','Pending','Rate_%','Available','Attend_B','Attend_C','Local_Leave','Overseas_Leave','Time_Off','Duty_Course']
-      const csv = [header, ...rows].map(r => r.join(',')).join('\n')
+      if (histMode === 'detailed') {
+        // One row per person per day
+        // Fetch all active users for "not reported" rows
+        const { data: activeUsers } = await supabase
+          .from('users').select('id, full_name, rank, title, personnel_type, group_id, appointment')
+          .eq('is_active', true).neq('role', 'admin').order('full_name')
+        const users = activeUsers ?? []
+
+        const header = ['Date','Name','Personnel_Type','Rank_Title','Group','Appointment','Status','Time_Submitted','Auto','Amended','Remarks']
+        const rows: string[][] = []
+
+        for (const date of dates) {
+          const daySubs = subs.filter(s => s.submission_date === date)
+          for (const u of users) {
+            const sub = daySubs.find(s => s.user_id === u.id)
+            const grp = GROUPS.find(g => g.id === u.group_id)?.short ?? ''
+            const rankTitle = u.personnel_type === 'Military' ? (u.rank ?? '') : (u.title ?? '')
+            if (sub) {
+              rows.push([
+                date,
+                u.full_name,
+                u.personnel_type,
+                rankTitle,
+                grp,
+                u.appointment ?? '',
+                sub.status,
+                new Date(sub.submitted_at).toLocaleTimeString('en-SG',{hour:'2-digit',minute:'2-digit',hour12:false}),
+                sub.is_auto ? 'Yes' : 'No',
+                sub.is_amended ? 'Yes' : 'No',
+                (sub.remarks ?? '').replace(/,/g,' ')
+              ])
+            } else {
+              rows.push([date, u.full_name, u.personnel_type, rankTitle, grp, u.appointment ?? '', 'Not Reported', '', 'No', 'No', ''])
+            }
+          }
+        }
+        csv = [header, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n')
+
+      } else {
+        // Summary: aggregate counts per date
+        const { data: activeUsers } = await supabase.from('users').select('id').eq('is_active',true).neq('role','admin')
+        const totalStrength = activeUsers?.length ?? 0
+
+        const header = ['Date','Strength','Reported','Pending','Rate_%','Available','Attend_B','Attend_C','Local_Leave','Overseas_Leave','Time_Off','Duty_Course']
+        const rows = dates.map(date => {
+          const day = subs.filter(s => s.submission_date === date)
+          const reported   = day.length
+          const pending    = totalStrength - reported
+          const available  = day.filter(s => ['Available','Work From Home'].includes(s.status)).length
+          const attendB    = day.filter(s => s.status === 'Attend B').length
+          const attendC    = day.filter(s => s.status === 'Attend C').length
+          const localLeave = day.filter(s => s.status === 'Local Leave').length
+          const overseasLv = day.filter(s => s.status === 'Overseas Leave').length
+          const timeOff    = day.filter(s => s.status === 'Time Off').length
+          const duty       = day.filter(s => ['Duty','Course'].includes(s.status)).length
+          const rate       = totalStrength ? Math.round(reported / totalStrength * 100) : 0
+          return [date, totalStrength, reported, pending, rate, available, attendB, attendC, localLeave, overseasLv, timeOff, duty]
+        })
+        csv = [header, ...rows].map(r => r.join(',')).join('\n')
+      }
+
       const blob = new Blob([csv], { type: 'text/csv' })
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `WITHOUT_EQUAL_History_${histFrom}_to_${histTo}.csv`
+      a.download = `WITHOUT_EQUAL_${histMode === 'detailed' ? 'Detailed' : 'Summary'}_${histFrom}_to_${histTo}.csv`
       a.click()
       URL.revokeObjectURL(url)
-      showToast('Historical CSV downloaded ✓')
+      showToast(`${histMode === 'detailed' ? 'Detailed' : 'Summary'} CSV downloaded ✓`)
     } catch { showToast('Export failed — try again') }
     setHistLoading(false)
   }
@@ -371,9 +414,30 @@ export default function FormationDashboard({ showToast }: { showToast: (m:string
       {/* HISTORICAL EXPORT */}
       <div className="we-card dark">
         <div className="we-clabel cl-amber">📥 Historical Records Export</div>
-        <div style={{fontSize:12,color:'var(--dim)',marginBottom:12,lineHeight:1.5}}>
-          Download a CSV of daily formation statistics for any date range. Includes strength, reporting rate, availability breakdown, leave counts, and medical status.
+
+        {/* Mode toggle */}
+        <div style={{display:'flex',gap:6,marginBottom:12}}>
+          {(['summary','detailed'] as const).map(m => (
+            <button
+              key={m}
+              onClick={()=>setHistMode(m)}
+              style={{
+                flex:1,fontSize:12,padding:'6px 0',borderRadius:6,cursor:'pointer',fontWeight:600,
+                border:`1px solid ${histMode===m?'var(--amber)':'var(--border)'}`,
+                background:histMode===m?'rgba(232,160,32,0.12)':'var(--surface)',
+                color:histMode===m?'var(--amber)':'var(--dim)'
+              }}
+            >
+              {m === 'summary' ? '📊 Summary' : '👥 Detailed'}
+            </button>
+          ))}
         </div>
+        <div style={{fontSize:12,color:'var(--dim)',marginBottom:12,lineHeight:1.5}}>
+          {histMode === 'summary'
+            ? 'One row per day — strength, reporting rate, and status count totals.'
+            : 'One row per person per day — name, rank, group, and individual status. Includes "Not Reported" entries.'}
+        </div>
+
         <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',marginBottom:12}}>
           <div style={{display:'flex',flexDirection:'column',gap:4,flex:1,minWidth:120}}>
             <label style={{fontSize:10,color:'var(--dim)',fontFamily:'var(--mono)',letterSpacing:'0.05em'}}>FROM</label>
