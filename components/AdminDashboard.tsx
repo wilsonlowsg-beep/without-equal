@@ -228,26 +228,78 @@ function AddUserForm({ onDone, showToast }: { onDone:()=>void; showToast:(m:stri
 }
 
 export default function AdminDashboard({ showToast }: { showToast:(m:string)=>void }) {
-  const [users,   setUsers]   = useState<User[]>([])
-  const [audit,   setAudit]   = useState<any[]>([])
-  const [tab,     setTab]     = useState<'users'|'audit'>('users')
-  const [showAdd, setShowAdd] = useState(false)
-  const [editing, setEditing] = useState<User|null>(null)
-  const [loading, setLoading] = useState(true)
-  const [search,  setSearch]  = useState('')
+  const [users,       setUsers]      = useState<User[]>([])
+  const [audit,       setAudit]      = useState<any[]>([])
+  const [tab,         setTab]        = useState<'users'|'audit'|'notifications'>('users')
+  const [showAdd,     setShowAdd]    = useState(false)
+  const [editing,     setEditing]    = useState<User|null>(null)
+  const [loading,     setLoading]    = useState(true)
+  const [search,      setSearch]     = useState('')
+  const [myUserId,    setMyUserId]   = useState<string|null>(null)
+  // Notification settings state
+  const [pushEnabled,  setPushEnabled]  = useState(true)
+  const [pushMessage,  setPushMessage]  = useState('⏰ 0800H — Report your status for today.')
+  const [pushLastSent, setPushLastSent] = useState('')
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [sendNowMsg,   setSendNowMsg]   = useState('')
+  const [sendNowTitle, setSendNowTitle] = useState('')
+  const [sending,      setSending]      = useState(false)
   const supabase = createClient()
 
-  useEffect(()=>{ loadData() },[])
+  useEffect(()=>{
+    loadData()
+    supabase.auth.getUser().then(({ data }) => setMyUserId(data.user?.id ?? null))
+  },[])
 
   const loadData = async () => {
     setLoading(true)
-    const [{ data: u },{ data: a }] = await Promise.all([
+    const [{ data: u },{ data: a },{ data: ss }] = await Promise.all([
       supabase.from('users').select('*').eq('is_active',true).order('group_id').order('full_name'),
       supabase.from('audit_log').select('*, user:users(full_name,rank,title,personnel_type)').order('created_at',{ascending:false}).limit(50),
+      supabase.from('system_settings').select('key,value'),
     ])
     setUsers(u??[])
     setAudit(a??[])
+    if (ss) {
+      const s = Object.fromEntries(ss.map((r:any)=>[r.key,r.value]))
+      setPushEnabled(s['push_enabled'] !== 'false')
+      if (s['push_message']) setPushMessage(s['push_message'])
+      if (s['push_last_sent']) setPushLastSent(s['push_last_sent'])
+    }
     setLoading(false)
+  }
+
+  const saveNotificationSettings = async () => {
+    setSavingSettings(true)
+    await Promise.all([
+      supabase.from('system_settings').upsert({ key:'push_enabled', value: pushEnabled?'true':'false', updated_at: new Date().toISOString() }),
+      supabase.from('system_settings').upsert({ key:'push_message', value: pushMessage.trim()||'⏰ 0800H — Report your status for today.', updated_at: new Date().toISOString() }),
+    ])
+    setSavingSettings(false)
+    showToast('Notification settings saved ✓')
+  }
+
+  const sendNow = async () => {
+    if (!sendNowMsg.trim() || !myUserId) return
+    setSending(true)
+    try {
+      const res = await fetch('/api/push/send-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: myUserId, message: sendNowMsg.trim(), title: sendNowTitle.trim()||undefined }),
+      })
+      const json = await res.json()
+      if (json.ok) {
+        showToast(`Push sent to ${json.sent} device${json.sent===1?'':'s'} ✓`)
+        setSendNowMsg(''); setSendNowTitle('')
+        setPushLastSent(new Date().toISOString())
+      } else {
+        showToast('Error: ' + (json.error ?? 'Unknown error'))
+      }
+    } catch(e) {
+      showToast('Network error — check console')
+    }
+    setSending(false)
   }
 
   const saveRoleAndGroup = async (role:string, groupId:number, workSchedule:string) => {
@@ -282,9 +334,13 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
   return (
     <div>
       <div style={{display:'flex',gap:6,marginBottom:12}}>
-        {(['users','audit'] as const).map(t=>(
+        {([
+          ['users',         `Users (${users.length})`],
+          ['notifications', '🔔 Notifications'],
+          ['audit',         'Audit Log'],
+        ] as const).map(([t, label])=>(
           <button key={t} className={`we-pill${tab===t?' on':''}`} onClick={()=>setTab(t)}>
-            {t==='users'?`Users (${users.length})`:'Audit Log'}
+            {label}
           </button>
         ))}
       </div>
@@ -366,6 +422,121 @@ export default function AdminDashboard({ showToast }: { showToast:(m:string)=>vo
           </div>
         )}
       </>}
+
+      {tab==='notifications' && (
+        <div>
+          {/* Status bar */}
+          <div className={`we-card ${pushEnabled?'green':'amber'}`} style={{marginBottom:12}}>
+            <div style={{display:'flex',alignItems:'center',gap:12}}>
+              <div style={{fontSize:28}}>{pushEnabled?'🔔':'🔕'}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:14,fontWeight:700,color:pushEnabled?'var(--green)':'var(--amber)'}}>
+                  Daily Push {pushEnabled?'Enabled':'Disabled'}
+                </div>
+                <div style={{fontSize:11,color:'var(--dim)',marginTop:2}}>
+                  {pushEnabled
+                    ? 'Fires at 0800H SGT to all users who haven\'t submitted'
+                    : 'No automatic push will be sent today'}
+                </div>
+                {pushLastSent && (
+                  <div style={{fontSize:10,color:'var(--faint)',marginTop:4,fontFamily:'var(--mono)'}}>
+                    Last sent: {new Date(pushLastSent).toLocaleString('en-SG',{dateStyle:'short',timeStyle:'short'})}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Daily push settings */}
+          <div className="we-card" style={{marginBottom:12}}>
+            <div className="we-clabel">Daily 0800H Push Settings</div>
+
+            {/* Toggle */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,padding:'10px 14px',background:'var(--surf-hi)',borderRadius:8,border:'1px solid var(--border)'}}>
+              <div>
+                <div style={{fontSize:13,fontWeight:600}}>Auto-push at 0800H</div>
+                <div style={{fontSize:11,color:'var(--dim)',marginTop:2}}>Disable for stand-downs or holidays</div>
+              </div>
+              <button
+                onClick={()=>setPushEnabled(v=>!v)}
+                style={{
+                  width:48,height:28,borderRadius:14,border:'none',cursor:'pointer',
+                  background: pushEnabled ? 'var(--green)' : 'var(--border)',
+                  position:'relative', transition:'background 0.2s', flexShrink:0,
+                }}
+              >
+                <div style={{
+                  position:'absolute', top:4, left: pushEnabled?22:4,
+                  width:20, height:20, borderRadius:10,
+                  background:'white', transition:'left 0.2s',
+                }}/>
+              </button>
+            </div>
+
+            {/* Message */}
+            <div className="fg">
+              <label className="we-label">Push Message</label>
+              <textarea
+                className="we-input we-textarea"
+                rows={2}
+                value={pushMessage}
+                onChange={e=>setPushMessage(e.target.value)}
+                placeholder="⏰ 0800H — Report your status for today."
+              />
+              <div style={{fontSize:10,color:'var(--dim)',marginTop:4}}>
+                This is the body text of the daily reminder notification.
+              </div>
+            </div>
+
+            <button
+              className="btn btn-primary"
+              style={{marginTop:4}}
+              disabled={savingSettings}
+              onClick={saveNotificationSettings}
+            >
+              {savingSettings ? 'Saving…' : 'Save Settings'}
+            </button>
+          </div>
+
+          {/* Send Now */}
+          <div className="we-card" style={{border:'1px solid rgba(8,145,178,0.3)',background:'rgba(8,145,178,0.04)'}}>
+            <div className="we-clabel" style={{color:'var(--teal,#0891B2)'}}>Send Immediate Push</div>
+            <div style={{fontSize:11,color:'var(--dim)',marginBottom:12,lineHeight:1.5}}>
+              Sends a push right now to all users who haven't submitted today. Use for parade changes, urgent announcements, or reminders.
+            </div>
+
+            <div className="fg" style={{marginBottom:8}}>
+              <label className="we-label">Title (optional)</label>
+              <input
+                className="we-input"
+                placeholder="WITHOUT EQUAL · Daily Readiness"
+                value={sendNowTitle}
+                onChange={e=>setSendNowTitle(e.target.value)}
+              />
+            </div>
+
+            <div className="fg" style={{marginBottom:12}}>
+              <label className="we-label">Message <span style={{color:'var(--red)'}}>*</span></label>
+              <textarea
+                className="we-input we-textarea"
+                rows={2}
+                placeholder="e.g. Parade at 0900 today — report by 0845"
+                value={sendNowMsg}
+                onChange={e=>setSendNowMsg(e.target.value)}
+              />
+            </div>
+
+            <button
+              className="btn btn-primary"
+              disabled={!sendNowMsg.trim() || sending || !myUserId}
+              onClick={sendNow}
+              style={{background:'var(--teal,#0891B2)'}}
+            >
+              {sending ? 'Sending…' : '📲 Send Now'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {tab==='audit' && (
         <div className="we-card">

@@ -448,3 +448,33 @@ CREATE POLICY "ps_own" ON push_subscriptions
   WITH CHECK (user_id = auth.uid());
 
 -- Service role (used by API notify route) bypasses RLS by default
+
+-- ============================================================
+-- SYSTEM SETTINGS — admin-controlled key/value store
+-- ============================================================
+CREATE TABLE IF NOT EXISTS system_settings (
+  key        TEXT PRIMARY KEY,
+  value      TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "ss_read"  ON system_settings;
+DROP POLICY IF EXISTS "ss_write" ON system_settings;
+
+-- Everyone can read settings (push_enabled needed client-side too)
+CREATE POLICY "ss_read" ON system_settings
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+-- Only admin can write
+CREATE POLICY "ss_write" ON system_settings
+  FOR ALL USING (get_my_role() = 'admin')
+  WITH CHECK (get_my_role() = 'admin');
+
+-- Default values
+INSERT INTO system_settings (key, value) VALUES
+  ('push_enabled', 'true'),
+  ('push_message', '⏰ 0800H — Report your status for today.'),
+  ('push_last_sent', '')
+ON CONFLICT (key) DO NOTHING;
