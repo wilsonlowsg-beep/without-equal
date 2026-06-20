@@ -4,6 +4,12 @@
   "devCommand": "next dev",
   "installCommand": "npm install",
   "regions": ["sin1"],
+  "crons": [
+    {
+      "path": "/api/push/notify",
+      "schedule": "0 0 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

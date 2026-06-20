@@ -25,12 +25,12 @@ export const MIL_RANKS = ['BG','COL','LTC','MAJ','CPT','LTA','2LT','ME6','ME5','
 export const CIV_TITLES = ['Mr','Ms','Mdm','Dr']
 
 export const GROUPS = [
-  {id:0,name:'AC3',    short:'AC3'},
-  {id:1,name:'Current',short:'CUR'},
-  {id:2,name:'Infor',  short:'INF'},
-  {id:3,name:'Civil',  short:'CIV'},
-  {id:4,name:'Log',    short:'LOG'},
-  {id:5,name:'Plans',  short:'PLN'},
+  {id:0,name:'AC Office', short:'ACO'},
+  {id:1,name:'Ops',       short:'OPS'},
+  {id:2,name:'Info',      short:'INF'},
+  {id:3,name:'Civil',     short:'CIV'},
+  {id:4,name:'Logistics', short:'LOG'},
+  {id:5,name:'Plans',     short:'PLN'},
 ]
 
 export const STATUS_CATS = [

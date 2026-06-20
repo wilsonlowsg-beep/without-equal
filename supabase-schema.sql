@@ -14,13 +14,13 @@ CREATE TABLE IF NOT EXISTS groups (
 );
 
 INSERT INTO groups (id, name, short_name) VALUES
-  (0, 'AC3',     'AC3'),
-  (1, 'Current', 'CUR'),
-  (2, 'Infor',   'INF'),
-  (3, 'Civil',   'CIV'),
-  (4, 'Log',     'LOG'),
-  (5, 'Plans',   'PLN')
-ON CONFLICT (id) DO NOTHING;
+  (0, 'AC Office', 'ACO'),
+  (1, 'Ops',       'OPS'),
+  (2, 'Info',      'INF'),
+  (3, 'Civil',     'CIV'),
+  (4, 'Logistics', 'LOG'),
+  (5, 'Plans',     'PLN')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, short_name = EXCLUDED.short_name;
 
 -- ── USERS ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
@@ -424,3 +424,27 @@ BEGIN
   RETURN inserted;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
+-- PUSH SUBSCRIPTIONS — Web Push / PWA notification registry
+-- ============================================================
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id    UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  endpoint   TEXT NOT NULL,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "ps_own" ON push_subscriptions;
+
+-- Users can manage their own subscription
+CREATE POLICY "ps_own" ON push_subscriptions
+  FOR ALL USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+
+-- Service role (used by API notify route) bypasses RLS by default
