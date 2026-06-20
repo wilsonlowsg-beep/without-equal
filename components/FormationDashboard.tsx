@@ -136,7 +136,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
   if (filter==='Overseas')     filtered = allUsers.filter(u=>allSubs.some(s=>s.user_id===u.id&&s.status==='Overseas Leave'))
 
   const buildReport = () => [
-    'WITHOUT EQUAL','Daily Readiness Report',`${today} · 0830H`,
+    'WITHOUT EQUAL','Daily Readiness Report',`${dayOfWeek(today)}, ${today} · 0830H`,
     '─────────────────────────',
     `Total Personnel : ${total}`,`Reported        : ${reported}`,`Pending         : ${pending}`,
     '─────────────────────────',

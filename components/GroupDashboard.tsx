@@ -142,7 +142,7 @@ export default function GroupDashboard({ user, showToast }: { user: User; showTo
   const reportText = [
     'WITHOUT EQUAL',
     `${grpName} Group Daily Status`,
-    `${today} · 0830H`,
+    `${new Date(today + 'T00:00:00').toLocaleDateString('en-SG', { weekday: 'short' })}, ${today} · 0830H`,
     '─────────────────────────',
     `Strength        : ${strength}`,
     `Reported        : ${reported}`,
