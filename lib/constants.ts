@@ -27,10 +27,11 @@ export const CIV_TITLES = ['Mr','Ms','Mdm','Dr']
 export const GROUPS = [
   {id:0,name:'Office',    short:'OFC'},
   {id:1,name:'Civil',     short:'CIV'},
-  {id:2,name:'Info',      short:'INF'},
+  {id:2,name:'Owl',       short:'OWL'},
   {id:3,name:'Current',   short:'CUR'},
   {id:4,name:'Logistics', short:'LOG'},
   {id:5,name:'Plans',     short:'PLN'},
+  {id:6,name:'Info',      short:'INF'},
 ]
 
 export const STATUS_CATS = [
