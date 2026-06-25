@@ -3,12 +3,9 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User } from '@/types/database'
+import { MIL_RANKS, CIV_TITLES, GROUPS } from '@/lib/constants'
 
 type Screen = 'login' | 'forgot' | 'register'
-
-const MIL_RANKS  = ['BG','COL','LTC','MAJ','CPT','LTA','2LT','ME6','ME5','ME4','ME3','ME2','ME1','MSG','SSG','3SG','CFC','CPL','LCP','PTE','REC']
-const CIV_TITLES = ['Mr','Ms','Mdm','Dr']
-const GROUPS     = [{id:0,name:'AC3'},{id:1,name:'Civil'},{id:2,name:'Infor'},{id:3,name:'Current'},{id:4,name:'Log'},{id:5,name:'Plans'}]
 
 export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
   const [screen, setScreen] = useState<Screen>('login')
