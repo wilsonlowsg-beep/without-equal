@@ -103,8 +103,8 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
       setRload(false); return
     }
 
-    // Try to insert profile directly as well (belt and braces with the trigger)
-    await supabase.from('users').insert({
+    // Insert profile into public.users
+    const { error: insertError } = await supabase.from('users').insert({
       id:             data.user.id,
       personnel_type: reg.type as any,
       rank:           reg.type === 'Military' ? reg.rank  : null,
@@ -113,9 +113,18 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
       group_id:       Number(reg.groupId),
       appointment:    reg.appt.trim(),
       mobile:         reg.mobile.trim(),
-      email:          reg.email.trim().toLowerCase(),
       role:           'personnel',
-    }).then(() => {}) // ignore error — trigger may have already done this
+    })
+
+    if (insertError) {
+      // Auth account created but profile insert failed
+      if (insertError.message.includes('duplicate') || insertError.code === '23505') {
+        setRerr('An account with this mobile number or email already exists.')
+      } else {
+        setRerr('Profile creation failed: ' + insertError.message)
+      }
+      setRload(false); return
+    }
 
     setMsg('Registered successfully! Sign in with your email and password.')
     setScreen('login')
