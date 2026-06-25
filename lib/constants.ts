@@ -21,7 +21,7 @@ export const C = {
   faint:    '#3A5470',
 } as const
 
-export const MIL_RANKS = ['BG','COL','LTC','MAJ','CPT','LTA','2LT','ME6','ME5','ME4','ME3','ME2','ME1','MSG','SSG','3SG','CFC','CPL','LCP','PTE','REC']
+export const MIL_RANKS = ['BG','COL','LTC','MAJ','CPT','LTA','2LT','ME6','ME5','ME4','ME3','ME2','ME1','MWO','1WO','2WO','3WO','MSG','SSG','3SG','CFC','CPL','LCP','PTE','REC']
 export const CIV_TITLES = ['Mr','Ms','Mdm','Dr']
 
 export const GROUPS = [
