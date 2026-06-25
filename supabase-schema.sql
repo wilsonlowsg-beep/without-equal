@@ -17,7 +17,7 @@ INSERT INTO groups (id, name, short_name) VALUES
   (0, 'Office',    'OFC'),
   (1, 'Civil',     'CIV'),
   (2, 'Info',      'INF'),
-  (3, 'Ops',       'OPS'),
+  (3, 'Current',   'CUR'),
   (4, 'Logistics', 'LOG'),
   (5, 'Plans',     'PLN')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, short_name = EXCLUDED.short_name;

@@ -28,7 +28,7 @@ export const GROUPS = [
   {id:0,name:'Office',    short:'OFC'},
   {id:1,name:'Civil',     short:'CIV'},
   {id:2,name:'Info',      short:'INF'},
-  {id:3,name:'Ops',       short:'OPS'},
+  {id:3,name:'Current',   short:'CUR'},
   {id:4,name:'Logistics', short:'LOG'},
   {id:5,name:'Plans',     short:'PLN'},
 ]
@@ -112,9 +112,7 @@ export function todayStr(): string {
 
 /** Returns tomorrow's date in SGT as YYYY-MM-DD */
 export function tomorrowStr(): string {
-  const sgt = new Date(Date.now() + 8 * 3600_000)
-  sgt.setUTCDate(sgt.getUTCDate() + 1)
-  return sgt.toISOString().slice(0, 10)
+  return new Date(Date.now() + 86400_000).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
 }
 
 export function nextWorkingDay(): string {

@@ -43,20 +43,24 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
 
   const loadData = async () => {
     setLoading(true)
-    // Formation stats via DB function
-    const { data: formStats } = await supabase.rpc('get_formation_readiness', { target_date: today })
 
-    // All users and today's subs for filter panel
-    const [{ data: users }, { data: subs }] = await Promise.all([
+    // Run all 4 queries in parallel
+    const [
+      { data: formStats },
+      { data: users },
+      { data: subs },
+      { data: allLeaves },
+    ] = await Promise.all([
+      supabase.rpc('get_formation_readiness', { target_date: today }),
       supabase.from('users').select('*').eq('is_active',true).order('full_name'),
       supabase.from('daily_submissions').select('*, covering_person:covering_person_id(id, full_name, rank, title, personnel_type)').eq('submission_date',today),
+      // Filter server-side: only leaves that haven't ended yet
+      supabase
+        .from('leave_periods')
+        .select('*, user:users(*), covering_person:covering_person_id(id, full_name, rank, title, personnel_type)')
+        .eq('status','approved')
+        .gte('end_date', today),
     ])
-
-    // Leave intelligence
-    const { data: allLeaves } = await supabase
-      .from('leave_periods')
-      .select('*, user:users(*), covering_person:covering_person_id(id, full_name, rank, title, personnel_type)')
-      .eq('status','approved')
 
     const overseas_now = (allLeaves??[]).filter(l => l.leave_type==='Overseas Leave' && today>=l.start_date && today<=l.end_date)
     const returning_today = (allLeaves??[]).filter(l => l.end_date===today)
