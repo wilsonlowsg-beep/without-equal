@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { User } from '@/types/database'
 import { MIL_RANKS, CIV_TITLES, GROUPS } from '@/lib/constants'
@@ -11,6 +11,9 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
   const [screen, setScreen] = useState<Screen>('login')
   const supabase = createClient()
   const [msg, setMsg] = useState('')
+  useEffect(() => {
+    supabase.from('groups').select('id').limit(1)
+  }, [])
 
   // LOGIN
   const [lemail, setLemail] = useState('')
@@ -45,7 +48,7 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
       setLload(false); return
     }
     const { data: u } = await supabase
-      .from('users').select('*,group:groups(*)')
+      .from('users').select('id,role,full_name,rank,title,appointment,group_id,is_active,personnel_type,mobile,group:groups(id,name,short_name)')
       .eq('id', data.user.id).single()
     if (u) onLogin(u)
     setLload(false)
