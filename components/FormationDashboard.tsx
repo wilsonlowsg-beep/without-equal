@@ -557,7 +557,7 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
       </div>
       <div className="we-card">
         <div className="we-clabel">{filter} · {filtered.length} personnel</div>
-        {filtered.slice(0,25).map(u => {
+        {filtered.map(u => {
           const sub = allSubs.find(s=>s.user_id===u.id)
           const grp = GROUPS.find(g=>g.id===u.group_id)?.short
           return (
@@ -582,7 +582,6 @@ export default function FormationDashboard({ user, showToast }: { user: User; sh
             </div>
           )
         })}
-        {filtered.length>25&&<div style={{fontSize:11,color:'var(--dim)',textAlign:'center',paddingTop:8}}>+{filtered.length-25} more</div>}
       </div>
 
       {/* AI SUMMARY */}
