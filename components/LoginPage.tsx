@@ -7,7 +7,7 @@ import { MIL_RANKS, CIV_TITLES, GROUPS } from '@/lib/constants'
 
 type Screen = 'login' | 'forgot' | 'register'
 
-export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
+export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) { // onLogin kept for API compatibility
   const [screen, setScreen] = useState<Screen>('login')
   const supabase = createClient()
   const [msg, setMsg] = useState('')
@@ -43,14 +43,22 @@ export default function LoginPage({ onLogin }: { onLogin:(u:User)=>void }) {
       email: lemail.trim().toLowerCase(),
       password: lpass,
     })
-    if (error || !data.user) {
+    if (error) {
       setLerr('Invalid email or password.')
       setLload(false); return
     }
-    const { data: u } = await supabase
-      .from('users').select('id,role,full_name,rank,title,appointment,group_id,is_active,personnel_type,mobile,group:groups(id,name,short_name)')
-      .eq('id', data.user.id).single()
-    if (u) onLogin(u)
+    // Fetch profile immediately — don't wait for onAuthStateChange round-trip
+    if (data.user) {
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('*, group:groups(*)')
+        .eq('id', data.user.id)
+        .single()
+      if (profile && !profileError) {
+        onLogin(profile)
+        return
+      }
+    }
     setLload(false)
   }
 
